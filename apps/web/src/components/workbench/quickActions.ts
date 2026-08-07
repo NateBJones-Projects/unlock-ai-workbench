@@ -40,16 +40,38 @@ export type WorkbenchQuickAction =
       readonly strategyLabel: string;
       readonly searchText: string;
       readonly templateId: typeof RINGER_READINESS_TEMPLATE_ID;
+    }
+  | {
+      readonly id: "ringer:unavailable";
+      readonly kind: "ringer-unavailable";
+      readonly title: "Ringer Readiness Check";
+      readonly description: string;
+      readonly strategyLabel: string;
+      readonly searchText: string;
+      readonly reason: string;
     };
 
-export interface WorkbenchRingerQuickActionCapability {
-  readonly launch: boolean;
-  readonly templates: ReadonlyArray<{
-    readonly id: string;
-    readonly executionStrategy: string;
-    readonly agentBacked: boolean;
-    readonly estimatedAgentCalls: number;
-  }>;
+export type WorkbenchRingerQuickActionCapability =
+  | {
+      readonly available: true;
+      readonly launch: boolean;
+      readonly templates: ReadonlyArray<{
+        readonly id: string;
+        readonly executionStrategy: string;
+        readonly agentBacked: boolean;
+        readonly estimatedAgentCalls: number;
+      }>;
+    }
+  | {
+      readonly available: false;
+      readonly reason: string | null;
+    };
+
+export function ringerUnavailableDescription(reason: string | null): string {
+  const serverReason = reason ?? "Ringer is not available on this machine.";
+  return /python/iu.test(serverReason)
+    ? `${serverReason} Install Python 3.13: brew install python@3.13, then relaunch Workbench.`
+    : serverReason;
 }
 
 export function buildWorkbenchQuickActions(input: {
@@ -61,10 +83,23 @@ export function buildWorkbenchQuickActions(input: {
 }): ReadonlyArray<WorkbenchQuickAction> {
   const actions: WorkbenchQuickAction[] = [];
 
-  const readinessTemplate = input.ringer?.templates.find(
-    (template) => template.id === RINGER_READINESS_TEMPLATE_ID,
-  );
-  if (input.ringer?.launch === true && readinessTemplate) {
+  if (input.ringer && !input.ringer.available) {
+    const description = ringerUnavailableDescription(input.ringer.reason);
+    actions.push({
+      id: "ringer:unavailable",
+      kind: "ringer-unavailable",
+      title: "Ringer Readiness Check",
+      description,
+      strategyLabel: "Ringer · unavailable on this machine",
+      searchText: "ringer readiness diagnostic health check unavailable python missing install",
+      reason: description,
+    });
+  }
+
+  const readinessTemplate = input.ringer?.available
+    ? input.ringer.templates.find((template) => template.id === RINGER_READINESS_TEMPLATE_ID)
+    : undefined;
+  if (input.ringer?.available === true && input.ringer.launch && readinessTemplate) {
     const spendLabel = readinessTemplate.agentBacked
       ? `${readinessTemplate.estimatedAgentCalls} estimated AI call${readinessTemplate.estimatedAgentCalls === 1 ? "" : "s"} · provider token costs may apply`
       : "no AI provider/model calls · no provider spend";

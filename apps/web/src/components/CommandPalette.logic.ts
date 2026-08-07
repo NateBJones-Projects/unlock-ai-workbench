@@ -336,6 +336,12 @@ export function buildBrowseGroups(input: {
   directoryIcon: ReactNode;
   browseUp: () => void | Promise<void>;
   browseTo: (name: string) => void | Promise<void>;
+  /** Offered when the typed path does not exist yet; selecting it creates the folder and adds it. */
+  createPath?: {
+    readonly path: string;
+    readonly icon: ReactNode;
+    readonly create: () => void | Promise<void>;
+  };
 }): CommandPaletteGroup[] {
   const items: CommandPaletteActionItem[] = [];
 
@@ -363,6 +369,21 @@ export function buildBrowseGroups(input: {
       keepOpen: true,
       run: async () => {
         await input.browseTo(entry.name);
+      },
+    });
+  }
+
+  const createPath = input.createPath;
+  if (createPath) {
+    items.push({
+      kind: "action",
+      value: "browse:create",
+      searchTerms: [input.browseQuery, createPath.path],
+      title: `Create "${createPath.path}"`,
+      icon: createPath.icon,
+      keepOpen: true,
+      run: async () => {
+        await createPath.create();
       },
     });
   }

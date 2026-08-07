@@ -42,6 +42,27 @@ describe("projectRingerThreadEvent", () => {
     expect(afterSecond.runs.map((entry) => entry.runId)).toEqual(["run-b", "run-a"]);
   });
 
+  it("drops only the addressed run when a removed event arrives", () => {
+    const first = run("run-a", 1, "2026-08-07T12:00:00.000Z");
+    const second = run("run-b", 1, "2026-08-07T12:01:00.000Z");
+
+    const afterRemoval = projectRingerThreadEvent([first, second], {
+      type: "removed",
+      threadId: first.threadId,
+      runId: first.runId,
+    });
+
+    expect(afterRemoval.type).toBe("snapshot");
+    expect(afterRemoval.runs.map((entry) => entry.runId)).toEqual(["run-b"]);
+
+    const unknownRemoval = projectRingerThreadEvent(afterRemoval.runs, {
+      type: "removed",
+      threadId: first.threadId,
+      runId: first.runId,
+    });
+    expect(unknownRemoval.runs.map((entry) => entry.runId)).toEqual(["run-b"]);
+  });
+
   it("does not let a stale upsert replace a newer run", () => {
     const current = run("run-a", 3, "2026-08-07T12:00:00.000Z");
     const stale = { ...current, revision: 2, status: "failed" as const };

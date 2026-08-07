@@ -10,6 +10,7 @@ const SOURCE_SKILL_CATEGORIES = [
     skills: [
       {
         id: "image-generation-gateway",
+        installName: "image-gateway",
         title: "Image Generation Gateway",
         whatItDoes:
           'Generates or edits images through a single API (OpenRouter is a good choice) with one command and zero per-call setup. The skill stores your saved preferences — default model, output directory, default size — so "generate an image of X" just works. It captures the current request shape of the API: which fields the endpoint expects, which model IDs are live, what each model costs per image, and the gotchas you\'ve already hit. Other skills reference this one instead of writing their own API code.',
@@ -61,8 +62,8 @@ const SOURCE_SKILL_CATEGORIES = [
         whyBuildIt:
           'Agents are confidently out of date. The single most common failure mode in AI-assisted research is the model "confirming" stale training data instead of discovering what changed last week. A dedicated search skill turns "search for current info" from a hope into a procedure — and it makes every other research-flavored skill in this library more trustworthy.',
         whatYouNeed: ["A Perplexity API key (or another search API with real-time results)"],
-        setupPrompt: `Create a new skill for my AI coding agent called "current-info-search", stored
-wherever my harness loads skills from.
+        setupPrompt: `Create a new skill for my AI coding agent called "current-information-search",
+stored wherever my harness loads skills from.
 
 The skill's job: when I ask about anything that changes quickly — AI model releases,
 pricing, software versions, news, APIs — call the Perplexity API directly instead of
@@ -152,8 +153,8 @@ folder and index.`,
         whyBuildIt:
           'Long chat responses are where good analysis goes to die. A complex comparison or plan rendered as a styled, scrollable, sometimes interactive HTML page is dramatically more useful — you can read it properly, share it, and keep it. Once your agent has a house style for artifacts, "make this a page" becomes a one-line request, and the publishing skill (below) can take any artifact public.',
         whatYouNeed: ["Nothing. This is pure agent capability plus your taste."],
-        setupPrompt: `Create a new skill for my AI coding agent called "html-artifacts", stored wherever my
-harness loads skills from.
+        setupPrompt: `Create a new skill for my AI coding agent called "html-artifact-builder", stored
+wherever my harness loads skills from.
 
 The skill's job: render dense or visual output — plans, reports, research explainers,
 review summaries, comparisons, diagrams, walkthroughs — as a single self-contained
@@ -618,7 +619,7 @@ local HTML reading pack that presents them one at a time in a deliberate order, 
 an index page and simple progress tracking.
 
 Before writing it, interview me for: where reading packs should be saved, and my
-visual preferences if I don't already have an html-artifacts skill to inherit from.
+visual preferences if I don't already have an html-artifact-builder skill to inherit from.
 
 The skill must include: (1) trigger conditions — when I have a pile of documents to
 review or ask for a "reading pack"; (2) conversion of each source document to clean
@@ -640,6 +641,7 @@ After writing it, test it on 3 or more documents I point you to and open the res
     skills: [
       {
         id: "personal-voice-skill",
+        installName: "personal-voice",
         title: "Personal Voice Skill",
         whatItDoes:
           "Encodes how you actually write — across contexts, not as a single tone preset. The skill captures your voice along multiple registers (direct/instructional, warm/relational, analytical, business-formal), with real samples of each, plus the rules of when to use which: when you're blunt, when you soften, what words and constructions you never use, how your emails differ from your posts. The agent then writes drafts that need light edits instead of rewrites.",
@@ -648,8 +650,8 @@ After writing it, test it on 3 or more documents I point you to and open the res
         whatYouNeed: [
           "5–10 samples of your real writing across different contexts (emails, posts, docs, messages)",
         ],
-        setupPrompt: `Create a new skill for my AI coding agent called "my-voice", stored wherever my
-harness loads skills from.
+        setupPrompt: `Create a new skill for my AI coding agent called "personal-voice", stored wherever
+my harness loads skills from.
 
 The skill's job: write in my authentic voice across contexts — not a single tone
 preset, but a model of how I actually write and when I shift registers.
@@ -672,6 +674,7 @@ give you, and let me grade them.`,
       },
       {
         id: "new-release-briefing",
+        installName: "release-briefing",
         title: "New Release Briefing",
         whatItDoes:
           "When something significant ships in your field — a new AI model, a major tool release, a platform change — this skill turns gathered release data into a publish-ready briefing package: a structured summary of what actually changed, an analysis post in your voice, a standardized title/subtitle, and image prompts for a matching thumbnail. It assumes the research happened upstream (via Current-Information Search) and focuses on transforming raw release material into a publishable artifact with a consistent format readers learn to expect.",
@@ -705,6 +708,7 @@ After writing it, test it on the most recent significant release in my field.`,
       },
       {
         id: "audience-calibrated-content-system",
+        installName: "audience-content-system",
         title: "Audience-Calibrated Content System",
         whatItDoes:
           "Generates content for a specific publication targeting a specific audience level — for example, a beginner-focused newsletter. The skill encodes the publication's content formats (e.g. a quick \"snack,\" a concept explainer, a step-by-step tutorial), the audience's assumed knowledge floor and ceiling, banned jargon with required substitutions, and the weekly cadence. Given a theme, it plans and drafts a full content batch in the right voice at the right level.",
@@ -737,6 +741,7 @@ drafting the shortest piece from the plan.`,
       },
       {
         id: "branded-image-prompting-guide",
+        installName: "branded-image-prompting",
         title: "Branded Image Prompting Guide",
         whatItDoes:
           "A complete prompting guide for generating images in your visual brand — your colors, typography direction, composition style, and recurring formats (thumbnails, infographics, diagrams, photoreal scenes, UI mockups). It includes brand guidelines the agent applies automatically, techniques for both natural-language and JSON-structured prompting on current image models, a library of proven prompt templates for your common formats, and corrective prompting recipes for when models drift off-brand.",
@@ -778,6 +783,7 @@ let me judge them.`,
     skills: [
       {
         id: "frontend-taste-system",
+        installName: "frontend-taste",
         title: "Frontend Taste System",
         whatItDoes:
           "Replaces your agent's default frontend instincts with a much stronger taste system: deliberate layout variance instead of the same hero-and-three-cards page, stricter component decisions, real typography, restrained color, and mandatory visual verification (screenshot, inspect, fix, repeat) before any frontend work is called done. Structurally, it's a bundle — a core skill with nested sub-skills for specific directions (minimalist editorial UI, data-dense dashboard UI, premium landing pages, mobile app concepts, redesigning existing projects) the agent loads as relevant.",
@@ -811,6 +817,7 @@ running your own visual verification loop on it.`,
       },
       {
         id: "personal-site-publisher",
+        installName: "site-publisher",
         title: "Personal Site Publisher",
         whatItDoes:
           'Publishes a finished page to your personal or company website as a real, share-ready URL — handling everything that separates "an HTML file" from "a published page": the design language, a clean slug and URL route, a page-specific Open Graph preview image (1200×630) so links unfurl properly, share title and description, indexing controls (public vs. unlisted), local verification before deploy, and the deploy itself. The skill encodes your site\'s stack and conventions so publishing is a procedure, not a project.',
@@ -843,6 +850,7 @@ me through cleaning it up or keeping it.`,
       },
       {
         id: "image-model-comparison-arena",
+        installName: "image-model-arena",
         title: "Image Model Comparison Arena",
         whatItDoes:
           "Builds and publishes comparison test pages for image-generation models: each model gets its own review page (same prompts, that model's outputs, cost and behavior notes), and all models share a side-by-side comparison viewer — all generated from a single config file. Adding a new model means adding a config entry and re-running; the skill handles generation, image optimization, page builds, and publishing. It maintains a registry of model costs and content-policy quirks discovered along the way.",
@@ -908,7 +916,7 @@ illustrations, images, or a gallery; (2) moment selection: choose frames across 
 FULL arc of the piece, each tied to a specific passage, with a one-line rationale;
 (3) style lock: one detailed style descriptor prepended to every prompt so all frames
 match; (4) per-frame captions explaining why that moment was chosen; (5) gallery
-assembly as a single page (use my html-artifacts conventions); (6) a short
+assembly as a single page (use my html-artifact-builder conventions); (6) a short
 ready-to-paste social note announcing the gallery, in my voice if I have a voice
 skill.
 
@@ -1003,6 +1011,7 @@ pipeline on a short video (2–3 minutes) before any real footage.`,
       },
       {
         id: "ai-editing-assistant",
+        installName: "nle-assistant",
         title: "AI Editing Assistant (NLE Integration)",
         whatItDoes:
           "Connects your agent directly to your video editing software (DaVinci Resolve is the proven target — it has a Python scripting API) so the agent operates inside the editor: analyzing transcripts, removing silences, extracting subclips, making editorial decisions, and building timelines programmatically in your real project rather than handing you files to import. Where Radio Edit produces a timeline file, this skill manipulates the editor live.",
@@ -1104,6 +1113,7 @@ the QA findings and what got written to the repo runbook.`,
       },
       {
         id: "browser-automation-qa",
+        installName: "browser-qa",
         title: "Browser Automation QA",
         whatItDoes:
           'Professional-grade web testing through browser automation (the Chrome DevTools Protocol, exposed to agents via MCP, is the proven route): performance traces and Core Web Vitals measurement (LCP, INP, CLS), network request monitoring, console error capture, device emulation for responsive testing, accessibility checks, and scripted multi-page workflows — with screenshots and metrics as evidence. The skill encodes which checks to run for which kind of change, and what "passing" means for your projects.',
@@ -1231,6 +1241,7 @@ actually in flight.`,
       },
       {
         id: "self-authored-pr-merge",
+        installName: "self-pr-merge",
         title: "Self-Authored PR Merge",
         whatItDoes:
           "A clean workflow for reviewing and merging pull requests you authored yourself — the daily reality of solo developers and agent-heavy workflows, which GitHub's approval model doesn't really accommodate (you can't approve your own PR). The skill runs a genuine self-review pass (diff inspection with fresh eyes, not a rubber stamp), checks CI status and mergeability, handles the merge with the right strategy, and finishes with branch and worktree-safe cleanup.",
@@ -1561,3 +1572,9 @@ export const RUNBOOK_BLUEPRINTS: readonly RunbookBlueprint[] = SOURCE_RUNBOOKS.m
   ...runbook,
   sourceUrl: OPEN_SKILLS_ORIGIN.concat("/runbooks#", runbook.id) as RunbookBlueprint["sourceUrl"],
 }));
+
+export function blueprintInstallName(
+  blueprint: Pick<SkillBlueprint, "id" | "installName">,
+): string {
+  return blueprint.installName ?? blueprint.id;
+}

@@ -19,6 +19,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { RingerRunsPanel } from "./RingerRunsPanel";
 import {
   applyRingerThreadEvent,
+  syncRingerThreadRuns,
   replaceRingerRun,
   selectCancelableRingerRun,
   selectRingerRunsForThread,
@@ -42,6 +43,7 @@ function strategyLabel(strategy: string): string {
 export function WorkbenchRingsidePanel(props: {
   readonly model: AgentPanelModel;
   readonly threadRef: ScopedThreadRef;
+  readonly threadHasSentTurns?: boolean;
   readonly stopping?: boolean;
   readonly onStopActiveWork?: () => void | Promise<void>;
   readonly onOpenArtifact?: (relativePath: string) => void;
@@ -110,14 +112,7 @@ export function WorkbenchRingsidePanel(props: {
     ) {
       return;
     }
-    updateRingerRuns((current) =>
-      applyRingerThreadEvent(current, {
-        ...runEventResult.value,
-        // The client stream atom already projects a complete snapshot. Merge
-        // it by revision when local cancel/list results are newer.
-        type: current.length === 0 ? "snapshot" : "upsert",
-      }),
-    );
+    updateRingerRuns((current) => syncRingerThreadRuns(current, runEventResult.value.runs));
   }, [props.threadRef.threadId, runEventResult, updateRingerRuns]);
 
   const handleCancelRingerRun = useCallback(
@@ -159,6 +154,28 @@ export function WorkbenchRingsidePanel(props: {
     ? (_group: AgentPanelWorkflowGroup) => props.onStopActiveWork?.()
     : undefined;
 
+  // Empty-state copy depends on whether the prepared prompt has been sent yet.
+  const preparedByComposer =
+    provenance !== null &&
+    (provenance.strategy === "prepared-prompt" || provenance.strategy === "native-skill");
+  const emptyPresentation =
+    preparedByComposer && props.threadHasSentTurns !== true
+      ? {
+          emptyTitle: "Ready at Ringside",
+          emptyDescription: "This workflow starts when you press Send.",
+        }
+      : preparedByComposer
+        ? {
+            emptyTitle: "Running in the conversation",
+            emptyDescription:
+              "The work is running in the conversation — this panel tracks parallel agent workers; the main thread streams in the transcript.",
+          }
+        : {
+            emptyTitle: "No agent activity yet",
+            emptyDescription:
+              "Start a Ringer run, workflow, or provider-native subagent to monitor it here.",
+          };
+
   return (
     <div className="flex h-full min-h-0 flex-col" data-workbench-ringside>
       <header className="shrink-0 border-b border-border/60 px-3 py-2.5">
@@ -198,10 +215,8 @@ export function WorkbenchRingsidePanel(props: {
           environmentId={props.threadRef.environmentId}
           threadId={props.threadRef.threadId}
           presentation={{
-            emptyTitle: provenance ? "Ready at Ringside" : "No agent activity yet",
-            emptyDescription: provenance
-              ? "The typed action is prepared. Its runs and native agents will appear here when execution begins."
-              : "Start a Ringer run, workflow, or provider-native subagent to monitor it here.",
+            emptyTitle: emptyPresentation.emptyTitle,
+            emptyDescription: emptyPresentation.emptyDescription,
             workflowSectionLabel: "Provider workflow runs",
             directAgentsLabel: "Native agents",
             showWorkerEvidence: true,

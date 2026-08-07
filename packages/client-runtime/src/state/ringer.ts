@@ -1,4 +1,9 @@
-import { WS_METHODS, type RingerRunProjection, type RingerThreadEvent } from "@t3tools/contracts";
+import {
+  WS_METHODS,
+  type RingerRunProjection,
+  type RingerThreadEvent,
+  type RingerThreadRunsEvent,
+} from "@t3tools/contracts";
 import * as Stream from "effect/Stream";
 import { Atom } from "effect/unstable/reactivity";
 
@@ -18,18 +23,20 @@ import {
 export function projectRingerThreadEvent(
   current: ReadonlyArray<RingerRunProjection>,
   event: RingerThreadEvent,
-): RingerThreadEvent {
+): RingerThreadRunsEvent {
   const runs =
-    event.type === "snapshot"
-      ? [...event.runs]
-      : (() => {
-          const byId = new Map(current.map((run) => [run.runId, run]));
-          for (const run of event.runs) {
-            const existing = byId.get(run.runId);
-            if (!existing || run.revision >= existing.revision) byId.set(run.runId, run);
-          }
-          return [...byId.values()];
-        })();
+    event.type === "removed"
+      ? current.filter((run) => run.runId !== event.runId)
+      : event.type === "snapshot"
+        ? [...event.runs]
+        : (() => {
+            const byId = new Map(current.map((run) => [run.runId, run]));
+            for (const run of event.runs) {
+              const existing = byId.get(run.runId);
+              if (!existing || run.revision >= existing.revision) byId.set(run.runId, run);
+            }
+            return [...byId.values()];
+          })();
   runs.sort(
     (left, right) =>
       Date.parse(right.startedAt) - Date.parse(left.startedAt) ||
@@ -109,6 +116,16 @@ export function createRingerEnvironmentAtoms<R, E>(
     cancel: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:ringer:cancel",
       tag: WS_METHODS.ringerCancel,
+      scheduler: lifecycleScheduler,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId, input }) =>
+          JSON.stringify([environmentId, input.threadId, input.runId]),
+      },
+    }),
+    dismiss: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:ringer:dismiss",
+      tag: WS_METHODS.ringerDismiss,
       scheduler: lifecycleScheduler,
       concurrency: {
         mode: "singleFlight",

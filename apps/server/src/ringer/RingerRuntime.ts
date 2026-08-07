@@ -12,6 +12,8 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as SynchronizedRef from "effect/SynchronizedRef";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
@@ -113,6 +115,12 @@ const HudIdentity = Schema.Struct({
   client: Schema.Literal("ringer"),
   protocol: Schema.Literal("unlock-workbench-v1"),
   instance_nonce: Schema.String,
+});
+
+const HudProcessRecord = Schema.Struct({
+  pid: Schema.Number,
+  port: Schema.Number,
+  nonce: Schema.String,
 });
 
 const ScopedProof = Schema.Struct({
@@ -311,6 +319,8 @@ export const makeWithOptions = (options: RingerRuntimeOptions = {}) =>
     const runIdsDir = path.join(integrationRoot, "run-ids");
     const workspacesDir = path.join(integrationRoot, "workspaces");
     const evalPath = path.join(integrationRoot, "runs.jsonl");
+    const hudStatePath = path.join(integrationRoot, "hud.json");
+    const hudLogPath = path.join(integrationRoot, "hud.log");
     const expectedRuntimeDigest =
       options.expectedRuntimeDigest?.trim().toLowerCase() ??
       process.env.UNLOCK_RINGER_EXPECTED_SHA256?.trim().toLowerCase();
@@ -470,7 +480,7 @@ export const makeWithOptions = (options: RingerRuntimeOptions = {}) =>
       return undefined;
     });
 
-    const resolveInstallation = Effect.gen(function* () {
+    const resolveInstallationUncached = Effect.gen(function* () {
       let sawRingerWithoutFixture = false;
       let sawInvalidBundle = false;
       for (const root of candidateRoots) {
@@ -520,6 +530,63 @@ export const makeWithOptions = (options: RingerRuntimeOptions = {}) =>
         } satisfies RingerRuntimeProbe,
       } as const;
     });
+
+    interface UnavailableResolution {
+      readonly probe: RingerRuntimeProbe;
+    }
+
+    interface VerifiedResolution extends UnavailableResolution {
+      readonly installation: Installation;
+    }
+
+    type Resolution = UnavailableResolution | VerifiedResolution;
+
+    interface InstallationCacheEntry {
+      readonly lockPath: string;
+      readonly signature: string;
+      readonly resolution: VerifiedResolution;
+    }
+
+    const installationCache = yield* SynchronizedRef.make<InstallationCacheEntry | undefined>(
+      undefined,
+    );
+
+    const lockSignature = (lockPath: string) =>
+      fs.stat(lockPath).pipe(
+        Effect.map(
+          (info) => `${info.mtime._tag === "Some" ? info.mtime.value.getTime() : -1}:${info.size}`,
+        ),
+        Effect.orElseSucceed(() => undefined),
+      );
+
+    // Bundle verification hashes every runtime file and probes python, so a
+    // verified resolution is reused until runtime-lock.json changes on disk.
+    // Failures are never cached.
+    const resolveInstallation = SynchronizedRef.modifyEffect(
+      installationCache,
+      (cached): Effect.Effect<readonly [Resolution, InstallationCacheEntry | undefined]> =>
+        Effect.gen(function* () {
+          if (
+            cached !== undefined &&
+            (yield* lockSignature(cached.lockPath)) === cached.signature
+          ) {
+            return [cached.resolution, cached] as const;
+          }
+          const resolution: Resolution = yield* resolveInstallationUncached;
+          if (!("installation" in resolution)) {
+            return [resolution, undefined] as const;
+          }
+          const lockPath = path.join(
+            path.dirname(resolution.installation.ringerPath),
+            "runtime-lock.json",
+          );
+          const signature = yield* lockSignature(lockPath);
+          return [
+            resolution,
+            signature === undefined ? undefined : { lockPath, signature, resolution },
+          ] as const;
+        }),
+    );
 
     const probe = resolveInstallation.pipe(Effect.map((result) => result.probe));
 
@@ -580,45 +647,63 @@ export const makeWithOptions = (options: RingerRuntimeOptions = {}) =>
       args: ReadonlyArray<string>,
       env: NodeJS.ProcessEnv,
       operation: RingerOperation,
+      logPath?: string,
     ) {
-      yield* spawner
+      return yield* spawner
         .spawn(
           ChildProcess.make(command, args, {
             detached: true,
             stdin: "ignore",
-            stdout: "ignore",
-            stderr: "ignore",
+            stdout: logPath === undefined ? "ignore" : "pipe",
+            stderr: logPath === undefined ? "ignore" : "pipe",
             env,
             extendEnv: false,
           }),
         )
         .pipe(
-          Effect.flatMap((handle) => handle.unref),
-          Effect.asVoid,
+          Effect.tap((handle) =>
+            // The detached fiber drains interleaved output into the log file
+            // for the child's lifetime, truncating on each spawn.
+            logPath === undefined
+              ? Effect.void
+              : Effect.forkDetach(
+                  Stream.run(handle.all, fs.sink(logPath, { flag: "w" })).pipe(Effect.ignore),
+                ),
+          ),
+          Effect.flatMap((handle) => Effect.as(handle.unref, handle.pid)),
           Effect.mapError(() => runtimeFailure(operation, "spawn")),
         );
     });
 
-    const hudIdentityMatches = (port: number, instanceNonce: string): Effect.Effect<boolean> =>
+    const fetchHudIdentity = (port: number): Effect.Effect<typeof HudIdentity.Type | undefined> =>
       Effect.gen(function* () {
         const response = yield* httpClient.execute(
           HttpClientRequest.get(`http://127.0.0.1:${port}/api/workbench/identity`).pipe(
             HttpClientRequest.acceptJson,
           ),
         );
-        if (response.status !== 200) return false;
+        if (response.status !== 200) return undefined;
         const raw = yield* response.text;
-        const identity = yield* decodeJson(HudIdentity, raw);
-        return (
-          identity.schema_version === 1 &&
-          identity.client === "ringer" &&
-          identity.protocol === "unlock-workbench-v1" &&
-          identity.instance_nonce === instanceNonce
-        );
+        return yield* decodeJson(HudIdentity, raw);
       }).pipe(
         Effect.timeout("500 millis"),
-        Effect.orElseSucceed(() => false),
+        Effect.orElseSucceed(() => undefined),
       );
+
+    const hudIdentityMatches = (port: number, instanceNonce: string): Effect.Effect<boolean> =>
+      fetchHudIdentity(port).pipe(
+        Effect.map((identity) => identity?.instance_nonce === instanceNonce),
+      );
+
+    const readHudRecord = fs.readFileString(hudStatePath).pipe(
+      Effect.flatMap((raw) => decodeJson(HudProcessRecord, raw)),
+      Effect.orElseSucceed(() => undefined),
+    );
+
+    const writeHudRecord = (record: typeof HudProcessRecord.Type) =>
+      fs
+        .writeFileString(hudStatePath, `${encodeUnknownJson(record)}\n`)
+        .pipe(Effect.mapError(() => runtimeFailure("launch", "prepare")));
 
     const ensureHud: RingerRuntime["Service"]["ensureHud"] = Effect.fn("RingerRuntime.ensureHud")(
       function* (input) {
@@ -641,10 +726,37 @@ export const makeWithOptions = (options: RingerRuntimeOptions = {}) =>
         ) {
           return input.preferredPort;
         }
+        const recorded = yield* readHudRecord;
+        if (recorded !== undefined) {
+          const identity = yield* fetchHudIdentity(recorded.port);
+          if (identity?.instance_nonce === input.instanceNonce) {
+            // A previously spawned HUD (for example one that outlived a
+            // readiness timeout) is still serving this instance; reuse it.
+            return recorded.port;
+          }
+          if (
+            identity !== undefined &&
+            identity.instance_nonce === recorded.nonce &&
+            Number.isSafeInteger(recorded.pid) &&
+            recorded.pid > 0
+          ) {
+            // The recorded port still answers with the recorded nonce, proving
+            // the recorded pid is our superseded HUD; terminate it before
+            // spawning a replacement. Any other probe result means the pid may
+            // have been reused and is never signaled.
+            yield* Effect.sync(() => {
+              try {
+                process.kill(recorded.pid);
+              } catch {
+                // The process exited between the probe and the signal.
+              }
+            });
+          }
+        }
         const port = yield* net
           .reserveLoopbackPort()
           .pipe(Effect.mapError(() => runtimeFailure("launch", "prepare")));
-        yield* Effect.scoped(
+        const pid = yield* Effect.scoped(
           spawnDetached(
             installation.pythonPath,
             [
@@ -659,12 +771,14 @@ export const makeWithOptions = (options: RingerRuntimeOptions = {}) =>
             ],
             runtimeEnv({ RINGER_HUD_INSTANCE_NONCE: input.instanceNonce }),
             "launch",
+            hudLogPath,
           ),
         );
+        yield* writeHudRecord({ pid, port, nonce: input.instanceNonce });
         const ready = yield* hudIdentityMatches(port, input.instanceNonce).pipe(
           Effect.repeat({
             until: (alive) => alive,
-            times: 30,
+            times: 150,
             schedule: Schedule.spaced("100 millis"),
           }),
           Effect.orElseSucceed(() => false),

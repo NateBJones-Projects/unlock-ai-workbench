@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { RUNBOOK_BLUEPRINTS, SKILL_BLUEPRINT_CATEGORIES, SKILL_BLUEPRINTS } from "./blueprints.ts";
+import {
+  blueprintInstallName,
+  RUNBOOK_BLUEPRINTS,
+  SKILL_BLUEPRINT_CATEGORIES,
+  SKILL_BLUEPRINTS,
+} from "./blueprints.ts";
 import { SKILLS } from "./skills.ts";
 import { WORKFLOWS } from "./workflows.ts";
 
@@ -110,6 +115,24 @@ describe("Unlock AI Open Skills blueprints", () => {
       expect(runbook.sourceUrl).toBe(
         `https://unlock-ai.natebjones.com/open-skills/runbooks#${runbook.id}`,
       );
+    }
+  });
+
+  it("states every blueprint's effective install name inside its setup prompt", () => {
+    for (const skill of SKILL_BLUEPRINTS) {
+      expect(skill.setupPrompt).toContain(blueprintInstallName(skill));
+    }
+  });
+
+  it("keeps blueprint install names aligned with the hardened manifests", () => {
+    const manifestInstallNames = new Map<string, string>(
+      SKILLS.map((skill) => [skill.id, skill.install.name]),
+    );
+    for (const skill of SKILL_BLUEPRINTS) {
+      const manifestName = manifestInstallNames.get(skill.id);
+      if (manifestName !== undefined) {
+        expect(blueprintInstallName(skill)).toBe(manifestName);
+      }
     }
   });
 

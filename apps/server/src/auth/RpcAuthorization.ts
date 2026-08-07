@@ -102,6 +102,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.ringerLaunch]: AuthOrchestrationOperateScope,
   [WS_METHODS.ringerGetStatus]: AuthOrchestrationReadScope,
   [WS_METHODS.ringerCancel]: AuthOrchestrationOperateScope,
+  [WS_METHODS.ringerDismiss]: AuthOrchestrationOperateScope,
   [WS_METHODS.ringerRetry]: AuthOrchestrationOperateScope,
   [WS_METHODS.ringerGate]: AuthOrchestrationOperateScope,
   [WS_METHODS.ringerGetProof]: AuthOrchestrationReadScope,

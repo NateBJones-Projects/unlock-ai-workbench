@@ -24,6 +24,7 @@ describe("Workbench Quick Actions", () => {
       scripts: [SCRIPT],
       detectedSkillNames: new Set([SKILLS[0]!.install.name]),
       ringer: {
+        available: true,
         launch: true,
         templates: [
           {
@@ -53,6 +54,7 @@ describe("Workbench Quick Actions", () => {
       scripts: [],
       detectedSkillNames: new Set(),
       ringer: {
+        available: true,
         launch: true,
         templates: [
           {
@@ -67,6 +69,41 @@ describe("Workbench Quick Actions", () => {
 
     expect(actions.some((action) => action.kind === "ringer")).toBe(false);
     expect(actions.every((action) => action.kind === "workflow")).toBe(true);
+  });
+
+  it("surfaces an unavailable Ringer row with the server reason and a Python fix", () => {
+    const actions = buildWorkbenchQuickActions({
+      workflows: [],
+      skills: [],
+      scripts: [],
+      detectedSkillNames: new Set(),
+      ringer: {
+        available: false,
+        reason:
+          "Python 3.12 or newer is required. Checked UNLOCK_RINGER_PYTHON, python3.13, python3.12, and python3.",
+      },
+    });
+
+    const unavailable = actions.find((action) => action.kind === "ringer-unavailable");
+    expect(unavailable?.title).toBe("Ringer Readiness Check");
+    expect(unavailable?.description).toContain("Python 3.12 or newer is required.");
+    expect(unavailable?.description).toContain(
+      "Install Python 3.13: brew install python@3.13, then relaunch Workbench.",
+    );
+    expect(actions.some((action) => action.kind === "ringer")).toBe(false);
+  });
+
+  it("keeps non-Python unavailable reasons verbatim without the install fix", () => {
+    const actions = buildWorkbenchQuickActions({
+      workflows: [],
+      skills: [],
+      scripts: [],
+      detectedSkillNames: new Set(),
+      ringer: { available: false, reason: "Ringer is disabled by server policy." },
+    });
+
+    const unavailable = actions.find((action) => action.kind === "ringer-unavailable");
+    expect(unavailable?.description).toBe("Ringer is disabled by server policy.");
   });
 
   it("searches strategy metadata and keeps favorites first", () => {

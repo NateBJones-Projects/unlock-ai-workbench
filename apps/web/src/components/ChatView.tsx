@@ -2841,10 +2841,6 @@ function ChatViewContent(props: ChatViewProps) {
           version: null,
           strategy: "project-shell",
         });
-        // Workbench Actions always surface the thread-scoped operations view.
-        // The command remains visible in the terminal; Ringside is where any
-        // native/Ringer workers and durable evidence appear.
-        useRightPanelStore.getState().open(activeThreadRef, "agents");
       }
       if (options?.rememberAsLastInvoked !== false) {
         setLastInvokedScriptByProjectId((current) => {
@@ -5921,6 +5917,7 @@ function ChatViewContent(props: ChatViewProps) {
       <WorkbenchRingsidePanel
         model={agentPanelModel}
         threadRef={activeThreadRef}
+        threadHasSentTurns={(activeThread?.messages.length ?? 0) > 0}
         stopping={isStoppingBackgroundWork}
         onStopActiveWork={isWorking ? onInterrupt : handleStopBackgroundWork}
         onOpenArtifact={openFileSurface}

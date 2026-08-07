@@ -1,84 +1,97 @@
-# Install T3 Code
+# Install Unlock AI Workbench
 
-T3 Code is a web and desktop GUI for running coding agents on your machine.
+Unlock AI Workbench is a desktop app you run from a cloned copy of this private repository. This guide takes you from a fresh Mac to a running Workbench.
 
-## Requirements
+## Before You Start
 
-Node.js `^22.16 || ^23.11 || >=24.10` on the machine that runs the T3 Code server.
+You need a GitHub account that has been granted access to the `NateBJones-Projects/unlock-ai-workbench` repository. If you can open that repository page in your browser while signed in, you have access.
 
-At least one provider CLI, installed and authenticated. See [Providers](#providers) below.
+Install the prerequisites by pasting each command into Terminal (Applications → Utilities → Terminal):
 
-## Run Without Installing
+1. [Homebrew](https://brew.sh), if `brew --version` says "command not found" — copy the install command from brew.sh.
+2. Node.js 24.13 or newer:
+
+   ```bash
+   brew install node
+   ```
+
+3. pnpm 11:
+
+   ```bash
+   brew install pnpm
+   ```
+
+4. One provider CLI, authenticated with your existing subscription:
+
+   ```bash
+   npm install -g @anthropic-ai/claude-code && claude auth login
+   ```
+
+   or
+
+   ```bash
+   npm install -g @openai/codex && codex login
+   ```
+
+5. Optional — Python 3.13, needed only for multi-agent Ringer runs:
+
+   ```bash
+   brew install python@3.13
+   ```
+
+The launcher re-checks all of this on every start and prints the exact fix for anything missing, so an incomplete setup fails with instructions, not mystery errors.
+
+## Get the Code
+
+There are two realistic paths. Both give you a real git clone that can receive updates.
+
+### Path A: GitHub Desktop (no command line)
+
+1. Download and open [GitHub Desktop](https://desktop.github.com).
+2. Sign in with the GitHub account that has access to the repository.
+3. Choose **File → Clone Repository**, select `NateBJones-Projects/unlock-ai-workbench`, pick a location you can find again (for example your home folder), and clone.
+
+### Path B: gh CLI (command line)
 
 ```bash
-npx t3@latest
+brew install gh
+gh auth login
+gh repo clone NateBJones-Projects/unlock-ai-workbench
 ```
 
-This starts the T3 Code server on your machine and opens the local web app. Use
-`npx t3@latest --help` for the full CLI reference.
+`gh auth login` walks you through browser sign-in; after that, cloning and later `git pull` updates work without password prompts.
 
-## Desktop App
+### Do Not Use "Download ZIP"
 
-Download the latest release from
-[GitHub Releases](https://github.com/pingdotgg/t3code/releases), or install from a package
-registry.
+GitHub's **Code → Download ZIP** button looks easier, but do not use it:
 
-Windows:
+- macOS marks every extracted file with the quarantine attribute, so Gatekeeper can block scripts inside the app from running.
+- A ZIP is a dead-end snapshot — it has no git history, so there is no update path. Every update would mean re-downloading and reconfiguring from scratch.
 
-```bash
-winget install T3Tools.T3Code
-```
+If you already installed from a ZIP, delete that folder and clone properly using Path A or B.
 
-macOS:
+## First Launch
 
-```bash
-brew install --cask t3-code
-```
+1. In Finder, open the cloned folder and double-click `START-WORKBENCH.command`.
+2. **The first double-click may be blocked by Gatekeeper** ("cannot be opened because it is from an unidentified developer"). Right-click (or Control-click) `START-WORKBENCH.command` and choose **Open**, then confirm **Open** in the dialog. On newer macOS versions you may instead need **System Settings → Privacy & Security → Open Anyway**. This is a one-time approval.
+3. A Terminal window opens and runs the launcher:
+   - **Step 1/2** installs the locked dependencies. This happens on the first run and again only when an update changes them — expect a few minutes the first time.
+   - **Step 2/2** starts the Workbench app.
+4. Keep the Terminal window open while you use the app. Closing it stops the Workbench.
 
-Arch Linux:
-
-```bash
-yay -S t3code-bin
-```
+All Workbench state lives inside this folder's `.t3` directory, isolated from any other T3 Code installation on your machine.
 
 ## Providers
 
-T3 Code drives provider CLIs; it does not ship them. Install the CLI for each provider you want
-to use, then authenticate it.
+The Workbench drives provider CLIs; it does not ship them. A provider must be installed and authenticated before you start a session with it — but the Workbench itself opens fine first, and shows each provider's status in **Settings**.
 
-| Provider   | CLI                                                   | Default binary | Log in with           |
-| ---------- | ----------------------------------------------------- | -------------- | --------------------- |
-| Codex      | [Codex CLI](https://developers.openai.com/codex/cli)  | `codex`        | `codex login`         |
-| Claude     | [Claude Code](https://claude.com/product/claude-code) | `claude`       | `claude auth login`   |
-| Cursor     | [Cursor CLI](https://cursor.com/cli)                  | `cursor-agent` | `agent login`         |
-| Grok Build | [Grok Build CLI](https://x.ai/cli)                    | `grok`         | `grok login`          |
-| OpenCode   | [OpenCode](https://opencode.ai)                       | `opencode`     | `opencode auth login` |
-
-Cursor is the one to watch: install Cursor CLI, which provides the `cursor-agent` binary that
-T3 Code looks for, but authenticate with `agent login`, not `cursor-agent login`.
-
-Run the login command on the machine running the T3 Code server, not on the device you browse
-from.
-
-### Binary Discovery
-
-Each provider CLI must be on the server's `PATH`, or have an explicit binary path set in
-**Settings** → the provider instance → **Binary path**. Use the explicit path when a version
-manager or a non-standard install location keeps the CLI off the `PATH` of the shell that
-started T3 Code.
-
-### When Auth Is Needed
-
-Provider auth is required before you start a session with that provider, not before you start
-T3 Code. You can install T3 Code, open it, and add providers afterwards. A provider that is not
-authenticated shows its status in **Settings** and fails at session start with the login command
-to run.
+If a provider works in Terminal but the app reports it missing, the app's `PATH` differs from your Terminal's. Open **Settings**, choose the provider instance, and set **Binary path** to the full path printed by `which claude` or `which codex`.
 
 For multi-account setups, see [Codex](./providers-codex.md) and [Claude](./providers-claude.md).
 
 ## Next Steps
 
-- [Permission modes](./permission-modes.md): how much T3 Code asks before acting
+- [Getting started](./getting-started.md): your first ten minutes, step by step
+- [Permission modes](./permission-modes.md): how much the Workbench asks before acting
 - [Remote access](./remote-access.md): connect from a phone, tablet, or another desktop
-- [Keeping T3 Code in sync](./updating.md): client and server version skew
-- [Running in the background](./background-service.md): Linux background service
+- [Updating](./updating.md): pulling new versions

@@ -1,7 +1,10 @@
 import {
+  blueprintInstallName,
   SKILL_BLUEPRINT_CATEGORIES,
   SKILL_BLUEPRINTS,
   SKILLS,
+  V1_SKILL_PROVIDER_COMPATIBILITY,
+  type ProviderDriver,
   type SkillManifest,
 } from "@t3tools/unlock-catalog";
 import { createFileRoute } from "@tanstack/react-router";
@@ -32,6 +35,18 @@ import { useWorkbenchLaunch } from "../components/workbench/useWorkbenchLaunch";
 import { useProjects, useServerConfigs } from "../state/entities";
 
 const MANIFEST_BY_ID = new Map<string, SkillManifest>(SKILLS.map((skill) => [skill.id, skill]));
+
+const PROVIDER_RUNTIME_NAMES: Record<ProviderDriver, string> = {
+  codex: "Codex",
+  claudeAgent: "Claude Code",
+  opencode: "OpenCode",
+  cursor: "Cursor",
+  grok: "Grok",
+};
+
+const VERIFIED_RUNTIME_NAMES = V1_SKILL_PROVIDER_COMPATIBILITY.filter(
+  (provider) => provider.status === "ready",
+).map((provider) => PROVIDER_RUNTIME_NAMES[provider.driver]);
 
 function SkillsRouteView() {
   const projects = useProjects();
@@ -87,7 +102,11 @@ function SkillsRouteView() {
           detail="Every local Unlock AI blueprint"
         />
         <Metric label="Verified packs" value={String(SKILLS.length)} detail="Hardened for v1" />
-        <Metric label="Verified runtimes" value="2" detail="Claude Code and Codex native skills" />
+        <Metric
+          label="Verified runtimes"
+          value={String(VERIFIED_RUNTIME_NAMES.length)}
+          detail={`${VERIFIED_RUNTIME_NAMES.join(" and ")} native skills`}
+        />
       </div>
 
       <div className="relative mb-8 max-w-xl">
@@ -114,9 +133,8 @@ function SkillsRouteView() {
             <div className="divide-y divide-border border-y border-border">
               {skills.map((skill) => {
                 const manifest = MANIFEST_BY_ID.get(skill.id);
-                const installed = manifest
-                  ? detectedSkills.has(manifest.install.name)
-                  : detectedSkills.has(skill.id);
+                const installName = manifest?.install.name ?? blueprintInstallName(skill);
+                const installed = detectedSkills.has(installName);
                 const actionId = `skill:${skill.id}`;
                 const setupPrompt = manifest
                   ? verifiedSkillSetupPrompt(manifest)
@@ -145,7 +163,10 @@ function SkillsRouteView() {
                           <span>
                             {manifest ? "Codex + Claude Code verified" : "Interview-led setup"}
                           </span>
-                          <span>{skill.whatYouNeed.length} setup inputs</span>
+                          <span>
+                            {skill.whatYouNeed.length}{" "}
+                            {skill.whatYouNeed.length === 1 ? "setup input" : "setup inputs"}
+                          </span>
                           {manifest ? <span>Deny by default</span> : null}
                         </div>
                       </div>
@@ -157,22 +178,18 @@ function SkillsRouteView() {
                             variant="outline"
                             disabled={launchingId !== null}
                             onClick={() =>
-                              void launchPrompt(
-                                `${actionId}:use`,
-                                skillUsePrompt(manifest?.install.name ?? skill.id),
-                                {
-                                  provenance: {
-                                    kind: "skill",
-                                    catalogId: skill.id,
-                                    title: skill.title,
-                                    version: manifest?.version ?? null,
-                                    strategy: "native-skill",
-                                  },
+                              void launchPrompt(`${actionId}:use`, skillUsePrompt(installName), {
+                                provenance: {
+                                  kind: "skill",
+                                  catalogId: skill.id,
+                                  title: skill.title,
+                                  version: manifest?.version ?? null,
+                                  strategy: "native-skill",
                                 },
-                              )
+                              })
                             }
                           >
-                            Use in thread
+                            {launchingId === `${actionId}:use` ? "Opening…" : "Use in thread"}
                             <ArrowRightIcon />
                           </Button>
                         ) : (

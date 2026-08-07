@@ -1,73 +1,30 @@
-# Keeping T3 Code in Sync
+# Updating the Workbench
 
-The T3 Code web or desktop app and the server it connects to work best when they use the same
-version. If they do not match, T3 Code shows a warning with the right update option for that server.
+Unlock AI Workbench updates through git, because your installation _is_ a git clone. There is no auto-updater, no installer to download, and no `npx` command — those flows belong to the upstream T3 Code product, not this fork.
 
-## Where to Find the Update
+## Update in Three Steps
 
-You may see the warning in either of these places:
+1. Quit the Workbench: close the app window and its Terminal window.
+2. Pull the latest version:
+   - **GitHub Desktop:** open the repository, click **Fetch origin**, then **Pull origin**.
+   - **Terminal:**
 
-- above the message box in the current conversation
-- **Settings** → **Connections**, beside the affected connection
+     ```bash
+     cd unlock-ai-workbench
+     git pull
+     ```
 
-Dismissing the conversation warning only hides that reminder for those two versions. It does not
-update the server, and the version difference remains visible in Connections.
+     (Use the actual path where you cloned the folder.)
 
-## Before You Update
+3. Relaunch by double-clicking `START-WORKBENCH.command`.
 
-Let active agent work and terminal commands finish first. Updating restarts the server, so the
-connection will disappear briefly and work that is still running may be interrupted.
+That is the whole update. The launcher notices when an update changed the dependency lockfile and reinstalls dependencies automatically — you will see "Step 1/2: Installing dependencies" again on the next launch. When nothing changed, it skips straight to starting the app.
 
-The update does not remove saved threads, settings, or project files.
+## If `git pull` Complains
 
-## Choose the Action You See
+- **"Your local changes would be overwritten"** — you (or an agent run) edited files inside the Workbench folder itself. Keep your own work in your project folder (for example `~/Documents/Unlock Workbench`), not inside the app's folder. To see what changed, run `git status`; to discard app-folder changes you do not want, run `git checkout -- <file>`.
+- **Authentication errors** — sign in again: GitHub Desktop re-prompts on its own; for the command line, run `gh auth login`.
 
-| Action                     | What to do                                                                                                                                                                  |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Update server**          | Available for the T3 Code Linux background service. Select the button and leave T3 Code open while it prepares, tests, restarts, and reconnects.                            |
-| **Update the desktop app** | Open the T3 Code desktop app on the machine that runs the server and install the app update there. Reopen it if needed.                                                     |
-| **Copy update command**    | Copy the command, open a terminal on the server machine, stop the current T3 Code server, and relaunch it with the copied command and any startup options you normally use. |
+## Provider CLIs Update Separately
 
-The available action depends on how that server was started. T3 Code does not update connected
-servers silently in the background.
-
-An older background-service launcher may ask you to run the exact
-`npx t3@<version> service update` command on the server machine. That one local update installs the
-rollback support needed for later remote updates, including versions that change the database.
-
-After selecting **Update**, the notice becomes a live status line: **Downloading…** while the new
-version is fetched and verified, then **Restarting…** while the server restarts into it. The same
-status appears in the conversation and in Connections, so navigating between them does not lose the
-update. A failure remains visible with its error and an option to retry.
-
-**Copy update command** gives you `npx t3@<client-version>`, which relaunches the server directly
-at the matching version. Add whatever startup options you normally use.
-
-If the server instead runs as the T3 Code background service, update the service on the host and
-pin the same version:
-
-```sh
-npx t3@<client-version> service update
-```
-
-`service update` installs the version of the CLI that invoked it, so `npx t3@latest service update`
-only resolves the skew when your client happens to be on the latest release. The exact version from
-the warning always works.
-
-See [Running T3 Code in the Background](./background-service.md) for install, status, and removal
-commands.
-
-## After the Update
-
-Keep the web or desktop app open while the server restarts. The update completes only after the
-service launcher reports that exact update committed and the replacement server is ready to accept
-commands. A rollback is reported immediately instead of waiting for a generic reconnect timeout.
-
-If a step fails:
-
-1. Retry the offered action once.
-2. Make sure you updated the machine named in the warning, not only the device you are using.
-3. For a command-line server, relaunch it with `npx t3@<client-version>`, replacing
-   `<client-version>` with the client version shown in the warning.
-
-For remote connection setup and access troubleshooting, see [Remote Access](./remote-access.md).
+Updating the Workbench does not update Claude Code, Codex, or any other provider CLI — and updating those does not update the Workbench. Each provider has its own update mechanism (Claude Code updates itself; npm-installed CLIs update with `npm install -g <package>` again). If a provider starts misbehaving after months of use, updating that CLI is a separate, worthwhile step.

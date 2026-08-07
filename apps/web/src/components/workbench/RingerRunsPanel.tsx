@@ -7,6 +7,10 @@ import type {
   ScopedThreadRef,
 } from "@t3tools/contracts";
 import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
+import {
   Check,
   ChevronDown,
   ChevronRight,
@@ -14,15 +18,21 @@ import {
   FileText,
   ScrollText,
   Square,
+  X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { cn } from "../../lib/utils";
 import { ringerEnvironment } from "../../state/ringer";
+import { useAtomCommand } from "../../state/use-atom-command";
+import { stackedThreadToast, toastManager } from "../ui/toast";
 import {
   ringerArtifactSupportsUtf8Preview,
   ringerRunCapabilityNote,
+  ringerRunDisplayName,
   ringerRunIsLive,
+  ringerRunIsTerminal,
+  selectDismissableRingerRun,
 } from "./ringerPanelModel";
 
 const RUN_STATUS: Record<
@@ -54,12 +64,15 @@ const MEMBER_STATUS: Record<
 function formatElapsed(seconds: number): string {
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
-  return `${minutes}m ${String(seconds % 60).padStart(2, "0")}s`;
+  if (minutes < 60) return `${minutes}m ${String(seconds % 60).padStart(2, "0")}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${String(minutes % 60).padStart(2, "0")}m`;
 }
 
 function formatTokens(tokens: number): string {
   if (tokens < 1_000) return String(tokens);
-  return `${(tokens / 1_000).toFixed(tokens < 10_000 ? 1 : 0)}k`;
+  if (tokens < 1_000_000) return `${(tokens / 1_000).toFixed(tokens < 10_000 ? 1 : 0)}k`;
+  return `${(tokens / 1_000_000).toFixed(tokens < 10_000_000 ? 1 : 0)}M`;
 }
 
 function RingerMemberDetailView(props: {
@@ -355,6 +368,8 @@ function RingerRunSection(props: {
   readonly run: RingerRunProjection;
   readonly stopping: boolean;
   readonly onCancel: (runId: RingerRunId) => void | Promise<void>;
+  readonly dismissing: boolean;
+  readonly onDismiss: (runId: RingerRunId) => void | Promise<void>;
 }) {
   const live = ringerRunIsLive(props.run);
   const [open, setOpen] = useState(live);
@@ -375,8 +390,11 @@ function RingerRunSection(props: {
           aria-expanded={open}
           className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
         >
-          <span className="truncate text-[.68rem] font-black tracking-wider uppercase">
-            {props.run.name}
+          <span
+            title={props.run.name}
+            className="truncate text-[.68rem] font-black tracking-wider uppercase"
+          >
+            {ringerRunDisplayName(props.run.name)}
           </span>
           <span className="font-mono text-[.62rem] text-muted-foreground">
             {visual.label} · {props.run.totals.passed}/{props.run.totals.total} passed
@@ -390,12 +408,27 @@ function RingerRunSection(props: {
         {live && props.run.operations.cancel ? (
           <button
             type="button"
-            disabled={props.stopping || props.run.status === "canceling"}
+            disabled={props.stopping}
             onClick={() => void props.onCancel(props.run.runId)}
             className="inline-flex shrink-0 items-center gap-1 rounded-sm border border-border/60 px-1.5 py-0.5 font-mono text-[.65rem] hover:bg-accent disabled:opacity-60"
           >
             <Square aria-hidden className="size-2.5 fill-current" />
-            {props.stopping || props.run.status === "canceling" ? "Stopping…" : "Stop run"}
+            {props.stopping
+              ? "Stopping…"
+              : props.run.status === "canceling"
+                ? "Stop again"
+                : "Stop run"}
+          </button>
+        ) : null}
+        {ringerRunIsTerminal(props.run) ? (
+          <button
+            type="button"
+            disabled={props.dismissing}
+            onClick={() => void props.onDismiss(props.run.runId)}
+            className="inline-flex shrink-0 items-center gap-1 rounded-sm border border-border/60 px-1.5 py-0.5 font-mono text-[.65rem] hover:bg-accent disabled:opacity-60"
+          >
+            <X aria-hidden className="size-2.5" />
+            {props.dismissing ? "Dismissing…" : "Dismiss"}
           </button>
         ) : null}
       </div>
@@ -448,20 +481,52 @@ export function RingerRunsPanel(props: {
   readonly stoppingRunId: RingerRunId | null;
   readonly onCancel: (runId: RingerRunId) => void | Promise<void>;
 }) {
-  if (props.runs.length === 0) return null;
+  const dismissRingerRun = useAtomCommand(ringerEnvironment.dismiss, { reportFailure: false });
+  const [dismissingRunId, setDismissingRunId] = useState<RingerRunId | null>(null);
+  const [dismissedRunIds, setDismissedRunIds] = useState<ReadonlySet<string>>(new Set());
+  const { runs: allRuns, threadRef } = props;
+  const handleDismiss = useCallback(
+    async (runId: RingerRunId) => {
+      const run = selectDismissableRingerRun(allRuns, threadRef.threadId, runId);
+      if (!run) return;
+      setDismissingRunId(runId);
+      const result = await dismissRingerRun({
+        environmentId: threadRef.environmentId,
+        input: { threadId: threadRef.threadId, runId },
+      });
+      if (result._tag === "Success") {
+        setDismissedRunIds((current) => new Set([...current, runId]));
+      } else if (!isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Could not dismiss this Ringer run",
+            description: error instanceof Error ? error.message : "An unexpected error occurred.",
+          }),
+        );
+      }
+      setDismissingRunId(null);
+    },
+    [allRuns, dismissRingerRun, threadRef.environmentId, threadRef.threadId],
+  );
+  const runs = allRuns.filter((run) => !dismissedRunIds.has(run.runId));
+  if (runs.length === 0) return null;
   return (
-    <section className="flex flex-col gap-2" data-ringer-run-count={props.runs.length}>
+    <section className="flex flex-col gap-2" data-ringer-run-count={runs.length}>
       <div className="flex items-center justify-between px-1.5 pt-1 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground">
         <span>Ringer runs</span>
-        <span className="font-mono normal-case">{props.runs.length} in this thread</span>
+        <span className="font-mono normal-case">{runs.length} in this thread</span>
       </div>
-      {props.runs.map((run) => (
+      {runs.map((run) => (
         <RingerRunSection
           key={run.runId}
           threadRef={props.threadRef}
           run={run}
           stopping={props.stoppingRunId === run.runId}
           onCancel={props.onCancel}
+          dismissing={dismissingRunId === run.runId}
+          onDismiss={handleDismiss}
         />
       ))}
     </section>

@@ -77,9 +77,9 @@ function WorkbenchHome() {
           detail={
             projects.length === 0
               ? "Required before a workflow can run"
-              : `${projects.length} available`
+              : `${projects.length} available · click to add or switch`
           }
-          {...(projects.length === 0 ? { action: openAddProject } : {})}
+          action={openAddProject}
         />
         <StatusCell
           label="AI providers"
@@ -157,7 +157,7 @@ function WorkbenchHome() {
           <HomeLink
             to="/skills"
             title="Skills"
-            description="Search all 41 blueprints, then install a verified pack or adapt one in a thread."
+            description={`Search all ${SKILL_BLUEPRINTS.length} blueprints, then install a verified pack or adapt one in a thread.`}
           />
           <HomeLink
             to="/learn"

@@ -35,6 +35,7 @@ const EMPTY_FAVORITES: ReadonlyArray<string> = [];
 
 function QuickActionIcon({ kind }: { readonly kind: WorkbenchQuickAction["kind"] }) {
   if (kind === "ringer") return <BotIcon className="size-4 text-[var(--unlock-cyan)]" />;
+  if (kind === "ringer-unavailable") return <BotIcon className="size-4 text-muted-foreground/60" />;
   if (kind === "workflow") return <WorkflowIcon className="size-4 text-[var(--unlock-cyan)]" />;
   if (kind === "skill") return <LibraryBigIcon className="size-4 text-violet-500" />;
   return <PlayIcon className="size-4 text-emerald-500" />;
@@ -42,6 +43,7 @@ function QuickActionIcon({ kind }: { readonly kind: WorkbenchQuickAction["kind"]
 
 function kindLabel(kind: WorkbenchQuickAction["kind"]): string {
   if (kind === "ringer") return "Ringer";
+  if (kind === "ringer-unavailable") return "Unavailable";
   if (kind === "workflow") return "Workflow";
   if (kind === "skill") return "Skill";
   return "Action";
@@ -89,6 +91,16 @@ export function WorkbenchQuickActions(props: {
   };
 
   const dispatch = async (action: WorkbenchQuickAction) => {
+    if (action.kind === "ringer-unavailable") {
+      toastManager.add(
+        stackedThreadToast({
+          type: "info",
+          title: "Ringer Readiness Check is unavailable",
+          description: action.reason,
+        }),
+      );
+      return;
+    }
     setRunningActionId(action.id);
     try {
       if (action.kind === "workflow") {
@@ -213,7 +225,14 @@ export function WorkbenchQuickActions(props: {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-2">
-                          <span className="truncate text-sm font-black text-foreground">
+                          <span
+                            className={cn(
+                              "truncate text-sm font-black",
+                              action.kind === "ringer-unavailable"
+                                ? "text-muted-foreground"
+                                : "text-foreground",
+                            )}
+                          >
                             {action.title}
                           </span>
                           <span className="text-[8px] font-black tracking-[0.1em] text-muted-foreground/65 uppercase">

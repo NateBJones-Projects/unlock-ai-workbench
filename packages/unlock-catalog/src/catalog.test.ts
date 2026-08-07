@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import { SKILL_BLUEPRINTS } from "./blueprints.ts";
 import {
   assertValidCatalog,
   getGuide,
@@ -7,6 +8,7 @@ import {
   getWorkflow,
   UNLOCK_CATALOG,
   validateCatalog,
+  validateSkillBlueprints,
 } from "./catalog.ts";
 import { renderSkillMarkdown } from "./skills.ts";
 import type { UnlockCatalog, WorkflowManifest } from "./types.ts";
@@ -76,6 +78,21 @@ describe("Unlock AI v1 catalog", () => {
     expect(getWorkflow("the-research-engine")?.title).toBe("The Research Engine");
     expect(getGuide("open-stack-field-guide")?.href).toContain("unlock-ai.natebjones.com");
     expect(getSkill("not-a-skill")).toBeUndefined();
+  });
+
+  it("validates blueprint install names as kebab-case slugs", () => {
+    expect(validateSkillBlueprints(SKILL_BLUEPRINTS)).toEqual([]);
+
+    const malformed = SKILL_BLUEPRINTS.slice(0, 1).map((blueprint) => ({
+      ...blueprint,
+      installName: "Not A Slug",
+    }));
+    expect(validateSkillBlueprints(malformed)).toEqual([
+      {
+        path: "blueprints.0.installName",
+        message: "Blueprint install names must be lowercase hyphen slugs.",
+      },
+    ]);
   });
 
   it("reports duplicate ids in malformed catalogs", () => {

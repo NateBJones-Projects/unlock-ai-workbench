@@ -1,4 +1,11 @@
-import { RUNBOOK_BLUEPRINTS, WORKFLOWS, type RunbookBlueprint } from "@t3tools/unlock-catalog";
+import {
+  blueprintInstallName,
+  RUNBOOK_BLUEPRINTS,
+  SKILL_BLUEPRINTS,
+  SKILLS,
+  WORKFLOWS,
+  type RunbookBlueprint,
+} from "@t3tools/unlock-catalog";
 import { createFileRoute } from "@tanstack/react-router";
 import { ArrowRightIcon, CheckCircle2Icon, ExternalLinkIcon, ShieldCheckIcon } from "lucide-react";
 
@@ -8,6 +15,11 @@ import { useWorkbenchLaunch } from "../components/workbench/useWorkbenchLaunch";
 import { useProjects } from "../state/entities";
 
 const READY_WORKFLOW_IDS = new Set<string>(WORKFLOWS.map((workflow) => workflow.id));
+
+const SKILL_INSTALL_NAMES = new Map<string, string>([
+  ...SKILL_BLUEPRINTS.map((blueprint) => [blueprint.id, blueprintInstallName(blueprint)] as const),
+  ...SKILLS.map((skill) => [skill.id, skill.install.name] as const),
+]);
 
 function runbookPlanningPrompt(runbook: RunbookBlueprint): string {
   return `Turn this Unlock AI runbook into a safe execution plan for the active workspace and agent provider.
@@ -43,7 +55,7 @@ function WorkflowsRouteView() {
       description="Nate's repeatable ways of getting useful work done. Each one arrives with the right sequence, safety boundaries, and definition of done."
       actions={
         <span className="text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
-          {project ? `Using ${project.title}` : "Choose a workspace at launch"}
+          {project ? `Using ${project.title}` : "Runs in your active workspace"}
         </span>
       }
     >
@@ -135,7 +147,7 @@ function WorkflowsRouteView() {
                               <h3 className="text-sm font-black text-foreground">{step.title}</h3>
                               {"skillId" in step && step.skillId ? (
                                 <code className="text-[10px] text-[var(--unlock-cyan)]">
-                                  ${step.skillId}
+                                  {SKILL_INSTALL_NAMES.get(step.skillId) ?? step.skillId}
                                 </code>
                               ) : null}
                               {"gate" in step && step.gate ? (
@@ -189,7 +201,7 @@ function WorkflowsRouteView() {
       >
         <div className="divide-y divide-border border-y border-border">
           {RUNBOOK_BLUEPRINTS.filter((runbook) => !READY_WORKFLOW_IDS.has(runbook.id)).map(
-            (runbook) => {
+            (runbook, index) => {
               const actionId = `runbook:${runbook.id}`;
               return (
                 <article
@@ -197,7 +209,7 @@ function WorkflowsRouteView() {
                   className="grid gap-4 py-5 lg:grid-cols-[3rem_minmax(0,1fr)_auto] lg:items-start"
                 >
                   <span className="font-mono text-xs text-muted-foreground/60">
-                    {runbook.number}
+                    {String(index + 1).padStart(2, "0")}
                   </span>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">

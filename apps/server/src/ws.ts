@@ -2013,6 +2013,10 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.ringerCancel, ringerRunService.cancel(input), {
             "rpc.aggregate": "ringer",
           }),
+        [WS_METHODS.ringerDismiss]: (input) =>
+          observeRpcEffect(WS_METHODS.ringerDismiss, ringerRunService.dismiss(input), {
+            "rpc.aggregate": "ringer",
+          }),
         [WS_METHODS.ringerRetry]: (input) =>
           observeRpcEffect(WS_METHODS.ringerRetry, ringerRunService.retry(input), {
             "rpc.aggregate": "ringer",

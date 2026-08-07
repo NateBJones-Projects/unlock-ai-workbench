@@ -1,5 +1,7 @@
 # Unlock AI Workbench — local v1
 
+Subscribers start at the [getting-started guide](./user/getting-started.md); this document is the product and architecture record.
+
 ## Product decision
 
 Unlock AI Workbench is a transparent, Nate Jones–branded product layer built on T3 Code. It does

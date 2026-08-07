@@ -10,7 +10,12 @@ export {
   V1_SKILL_PROVIDER_COMPATIBILITY,
   V1_WORKFLOW_PROVIDER_COMPATIBILITY,
 } from "./compatibility.ts";
-export { RUNBOOK_BLUEPRINTS, SKILL_BLUEPRINT_CATEGORIES, SKILL_BLUEPRINTS } from "./blueprints.ts";
+export {
+  blueprintInstallName,
+  RUNBOOK_BLUEPRINTS,
+  SKILL_BLUEPRINT_CATEGORIES,
+  SKILL_BLUEPRINTS,
+} from "./blueprints.ts";
 export { GUIDE_LINKS, type GuideId } from "./guides.ts";
 export { renderSkillMarkdown, SKILLS, type SkillId } from "./skills.ts";
 export { UNLOCK_SOURCE_SNAPSHOT } from "./sourceSnapshot.ts";

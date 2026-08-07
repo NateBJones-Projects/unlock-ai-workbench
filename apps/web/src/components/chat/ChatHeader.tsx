@@ -121,8 +121,12 @@ export const ChatHeader = memo(function ChatHeader({
   );
   const launchRinger = useAtomCommand(ringerEnvironment.launch, { reportFailure: false });
   const ringerQuickActionCapability = useMemo(() => {
-    if (ringerCapabilities._tag !== "Success" || !ringerCapabilities.value.available) return null;
+    if (ringerCapabilities._tag !== "Success") return null;
+    if (!ringerCapabilities.value.available) {
+      return { available: false as const, reason: ringerCapabilities.value.reason ?? null };
+    }
     return {
+      available: true as const,
       launch: ringerCapabilities.value.operations.launch,
       templates: ringerCapabilities.value.templates,
     };

@@ -1,65 +1,23 @@
 # Contributing
 
-## Read This First
+Unlock AI Workbench is a private alpha for subscribers of Nate B. Jones's newsletter. Access to this repository is by invitation; there is no public issue tracker or PR queue yet.
 
-We are not actively accepting contributions right now.
+## Reporting a Problem
 
-You can still open an issue or PR, but please do so knowing there is a high chance we close it, defer it forever, or never look at it.
+Report problems through the same subscriber channel where you received access to this repository. The most useful reports include:
 
-If that sounds annoying, that is because it is. This project is still early and we are trying to keep scope, quality, and direction under control.
+- what you clicked or ran, and what you expected;
+- what actually happened, including any messages in the Terminal window that `START-WORKBENCH.command` opened;
+- your macOS version and, if relevant, the provider you were using (Claude Code, Codex, ...).
 
-PRs are automatically labeled with a `vouch:*` trust status and a `size:*` diff size based on changed lines.
+Everything gets read. This is an alpha run by a small team, so fixes are prioritized by how badly something blocks real use.
 
-If you are an external contributor, expect `vouch:unvouched` until we explicitly add you to [.github/VOUCHED.td](.github/VOUCHED.td).
+## Development
 
-## What We Are Most Likely To Accept
+The Workbench is a fork of the open-source [T3 Code](https://github.com/pingdotgg/t3code) agent harness with a Nate Jones Media product layer on top. If you are set up to work on the code:
 
-Small, focused bug fixes.
+- Development setup and upstream tooling: [docs/internals/upstream-t3.md](./docs/internals/upstream-t3.md)
+- Architecture: [docs/internals/overview.md](./docs/internals/overview.md)
+- Agent rules for this repository: [AGENTS.md](./AGENTS.md)
 
-Small reliability fixes.
-
-Small performance improvements.
-
-Tightly scoped maintenance work that clearly improves the project without changing its direction.
-
-## What We Are Least Likely To Accept
-
-Large PRs.
-
-Drive-by feature work.
-
-Opinionated rewrites.
-
-Anything that expands product scope without us asking for it first.
-
-If you open a 1,000+ line PR full of new features, we will probably close it quickly and remember that you ignored the clearly written instructions.
-
-## If You Still Want To Open A PR
-
-Keep it small.
-
-Explain exactly what changed.
-
-Explain exactly why the change should exist.
-
-Do not mix unrelated fixes together.
-
-If the PR makes anything resembling a UI change, include clear before/after images.
-
-If the change depends on motion, timing, transitions, or interaction details, include a short video.
-
-If we have to guess what changed, we are much less likely to review it.
-
-## Issues First
-
-If you are thinking about a non-trivial change, open an issue first.
-
-That still does not mean we will want the PR, but it gives you a chance to avoid wasting your time.
-
-## Be Realistic
-
-Opening a PR does not create an obligation on our side.
-
-We may close it. We may ignore it. We may ask you to shrink it. We may reimplement the idea ourselves later.
-
-If you are fine with that, proceed.
+Changes that belong to the upstream harness rather than the Workbench product layer should be proposed upstream, not here.

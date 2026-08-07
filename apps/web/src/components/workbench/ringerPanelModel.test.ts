@@ -9,9 +9,13 @@ import {
   applyRingerThreadEvent,
   ringerArtifactSupportsUtf8Preview,
   ringerRunCapabilityNote,
+  ringerRunDisplayName,
   ringerRunIsLive,
+  ringerRunIsTerminal,
   selectCancelableRingerRun,
+  selectDismissableRingerRun,
   selectRingerRunsForThread,
+  syncRingerThreadRuns,
 } from "./ringerPanelModel";
 
 function run(id: string, revision: number, startedAt: string): RingerRunProjection {
@@ -48,6 +52,65 @@ describe("ringerPanelModel", () => {
 
     expect(result.map((entry) => entry.runId)).toEqual(["run-b", "run-a"]);
     expect(result.find((entry) => entry.runId === "run-a")?.status).toBe("succeeded");
+  });
+
+  it("removes only the addressed run when a removed event arrives", () => {
+    const first = run("run-a", 1, "2026-08-07T12:00:00.000Z");
+    const second = run("run-b", 1, "2026-08-07T12:01:00.000Z");
+
+    const result = applyRingerThreadEvent([first, second], {
+      type: "removed",
+      threadId: first.threadId,
+      runId: first.runId,
+    });
+
+    expect(result.map((entry) => entry.runId)).toEqual(["run-b"]);
+  });
+
+  it("syncs a complete snapshot: prunes absent runs, keeps newer local revisions", () => {
+    const kept = run("run-a", 3, "2026-08-07T12:00:00.000Z");
+    const dismissed = run("run-b", 1, "2026-08-07T12:01:00.000Z");
+    const staleIncoming = { ...kept, revision: 2, status: "queued" as const };
+
+    const result = syncRingerThreadRuns([kept, dismissed], [staleIncoming]);
+
+    expect(result.map((entry) => entry.runId)).toEqual(["run-a"]);
+    expect(result[0]?.revision).toBe(3);
+    expect(result[0]?.status).toBe("running");
+  });
+
+  it("allows dismissing only terminal runs in the addressed thread", () => {
+    const running = run("run-a", 1, "2026-08-07T12:00:00.000Z");
+    const finished = { ...run("run-b", 1, "2026-08-07T12:01:00.000Z"), status: "failed" as const };
+
+    expect(ringerRunIsTerminal(running)).toBe(false);
+    expect(ringerRunIsTerminal(finished)).toBe(true);
+    expect(selectDismissableRingerRun([running, finished], finished.threadId, finished.runId)).toBe(
+      finished,
+    );
+    expect(
+      selectDismissableRingerRun([running, finished], running.threadId, running.runId),
+    ).toBeNull();
+    expect(
+      selectDismissableRingerRun(
+        [finished],
+        "other-thread" as RingerRunProjection["threadId"],
+        finished.runId,
+      ),
+    ).toBeNull();
+  });
+
+  it("strips a trailing UUID-ish suffix from run names for display only", () => {
+    expect(ringerRunDisplayName("Diagnostic swarm 0f8b2c1d-4a5e-4f6a-9b0c-1d2e3f4a5b6c")).toBe(
+      "Diagnostic swarm",
+    );
+    expect(ringerRunDisplayName("diagnostic-0f8b2c1d-4a5e-4f6a-9b0c-1d2e3f4a5b6c")).toBe(
+      "diagnostic",
+    );
+    expect(ringerRunDisplayName("0f8b2c1d-4a5e-4f6a-9b0c-1d2e3f4a5b6c")).toBe(
+      "0f8b2c1d-4a5e-4f6a-9b0c-1d2e3f4a5b6c",
+    );
+    expect(ringerRunDisplayName("Unlock Workbench diagnostic")).toBe("Unlock Workbench diagnostic");
   });
 
   it("does not let a stale event replace a newer projection", () => {
