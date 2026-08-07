@@ -52,6 +52,7 @@ import {
   makeProviderSnapshotSettingsSource,
   type ProviderSnapshotSettings,
 } from "../providerUpdateSettings.ts";
+import { readUnlockSkillMarkers } from "./ClaudeSkills.ts";
 import {
   codexContinuationIdentity,
   materializeCodexShadowHome,
@@ -104,6 +105,20 @@ const withInstanceIdentity =
     ...(input.accentColor ? { accentColor: input.accentColor } : {}),
     continuation: { groupKey: input.continuationGroupKey },
   });
+
+/**
+ * The Codex app-server's `skills/list` reports skill paths without their
+ * frontmatter, so the Unlock markers are read from each skill's SKILL.md on
+ * disk. Best-effort per skill: an unreadable file leaves its entry unchanged.
+ */
+const annotateSkillsWithUnlockMarkers = Effect.fn("annotateSkillsWithUnlockMarkers")(function* (
+  draft: ServerProviderDraft,
+): Effect.fn.Return<ServerProviderDraft, never, FileSystem.FileSystem | Path.Path> {
+  const skills = yield* Effect.forEach(draft.skills, (skill) =>
+    Effect.map(readUnlockSkillMarkers(skill.path), (markers) => ({ ...skill, ...markers })),
+  );
+  return { ...draft, skills };
+});
 
 export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
   driverKind: DRIVER_KIND,
@@ -166,9 +181,14 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
       // in as instance rebuilds from the registry rather than in-place
       // updates. Pre-provide `ChildProcessSpawner` so the check fits
       // `makeManagedServerProvider.checkProvider`'s `R = never`.
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
       const checkProvider = checkCodexProviderStatus(effectiveConfig, undefined, processEnv).pipe(
+        Effect.flatMap(annotateSkillsWithUnlockMarkers),
         Effect.map(stampIdentity),
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+        Effect.provideService(FileSystem.FileSystem, fileSystem),
+        Effect.provideService(Path.Path, path),
       );
       const snapshotSettings = makeProviderSnapshotSettingsSource(effectiveConfig, serverSettings);
       const snapshot = yield* makeManagedServerProvider<ProviderSnapshotSettings<CodexSettings>>({

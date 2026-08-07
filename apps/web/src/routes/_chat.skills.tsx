@@ -15,6 +15,7 @@ import {
   ExternalLinkIcon,
   SearchIcon,
   ShieldIcon,
+  SparklesIcon,
   WrenchIcon,
 } from "lucide-react";
 import { useMemo, useState, type ReactElement } from "react";
@@ -23,7 +24,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { WorkbenchPageShell, WorkbenchSection } from "../components/workbench/WorkbenchPageShell";
 import {
-  detectedWorkbenchSkillNames,
+  detectedWorkbenchSkills,
   resolveWorkbenchProvider,
 } from "../components/workbench/workbenchProvider";
 import {
@@ -69,7 +70,7 @@ function SkillsRouteView() {
     launchProject?.defaultModelSelection?.instanceId ??
     null;
   const activeProvider = resolveWorkbenchProvider(providers, preferredProviderInstanceId);
-  const detectedSkills = detectedWorkbenchSkillNames(activeProvider);
+  const detectedSkills = detectedWorkbenchSkills(activeProvider);
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const visibleSkills = useMemo(() => {
@@ -134,7 +135,11 @@ function SkillsRouteView() {
               {skills.map((skill) => {
                 const manifest = MANIFEST_BY_ID.get(skill.id);
                 const installName = manifest?.install.name ?? blueprintInstallName(skill);
-                const installed = detectedSkills.has(installName);
+                const installedMeta = detectedSkills.get(installName);
+                const installed = installedMeta !== undefined;
+                const personalizedLabel = installedMeta?.personalizedAt
+                  ? formatPersonalizedLabel(installedMeta.personalizedAt)
+                  : null;
                 const actionId = `skill:${skill.id}`;
                 const setupPrompt = manifest
                   ? verifiedSkillSetupPrompt(manifest)
@@ -149,12 +154,15 @@ function SkillsRouteView() {
                             {skill.title}
                           </h2>
                           {installed ? (
-                            <Status tone="success" icon={<CheckIcon />} label="Detected" />
+                            <Status tone="success" icon={<CheckIcon />} label="Installed" />
                           ) : manifest ? (
                             <Status tone="cyan" icon={<ShieldIcon />} label="Verified pack" />
                           ) : (
                             <Status tone="muted" icon={<WrenchIcon />} label="Blueprint" />
                           )}
+                          {personalizedLabel ? (
+                            <Status tone="cyan" icon={<SparklesIcon />} label={personalizedLabel} />
+                          ) : null}
                         </div>
                         <p className="mt-1 max-w-4xl text-sm leading-6 text-muted-foreground">
                           {skill.whatItDoes}
@@ -259,6 +267,18 @@ function SkillsRouteView() {
       ) : null}
     </WorkbenchPageShell>
   );
+}
+
+/** Renders the `x-unlock-personalized` date as e.g. "Personalized Aug 7". */
+function formatPersonalizedLabel(personalizedAt: string): string {
+  const parsed = new Date(`${personalizedAt}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return "Personalized";
+  const sameYear = parsed.getFullYear() === new Date().getFullYear();
+  return `Personalized ${parsed.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+  })}`;
 }
 
 function Status({

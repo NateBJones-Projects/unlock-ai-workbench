@@ -3,6 +3,7 @@
 ## Using the Workbench
 
 - [Getting started — your first ten minutes](./user/getting-started.md)
+- [A visual tour of every surface](./user/visual-tour.md)
 - [Install and first run](./user/install.md)
 - [Unlock AI Workbench local v1](./unlock-ai-workbench-v1.md)
 - [Using Ringside](./user/ringside.md)

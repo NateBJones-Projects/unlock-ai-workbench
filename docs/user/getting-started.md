@@ -2,7 +2,7 @@
 
 This walkthrough takes you from double-click to your first completed workflow and your first Ringer run. Each step says what you should see, and what to do when you don't.
 
-If you have not installed anything yet, start with [Install and first run](./install.md).
+If you have not installed anything yet, start with [Install and first run](./install.md). To see what every screen looks like before you click, open the [visual tour](./visual-tour.md).
 
 ## 1. Launch the Workbench
 

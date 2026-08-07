@@ -18,6 +18,39 @@ const CATEGORY_LABELS: Record<GuideCategory, string> = {
 
 const CATEGORY_ORDER: readonly GuideCategory[] = ["agents", "codex", "general"];
 
+const NATE_SURFACES = [
+  {
+    title: "Unlock AI guides",
+    href: "https://unlock-ai.natebjones.com",
+    description: "The published field-guide library this Workbench's catalog links back to.",
+  },
+  {
+    title: "Nate's Newsletter on Substack",
+    href: "https://natesnewsletter.substack.com",
+    description: "Essays and analysis on AI strategy — the writing the guides grew out of.",
+  },
+  {
+    title: "YouTube",
+    href: "https://www.youtube.com/@NateBJones",
+    description: "Video breakdowns of AI news, models, and working methods.",
+  },
+  {
+    title: "AI News & Strategy Daily",
+    href: "https://podcasts.apple.com/us/podcast/ai-news-strategy-daily-with-nate-b-jones/id1877109372",
+    description: "The daily podcast, for when you are away from a screen.",
+  },
+  {
+    title: "TikTok",
+    href: "https://www.tiktok.com/@nate.b.jones",
+    description: "Short-form takes on what just changed in AI.",
+  },
+  {
+    title: "natebjones.com",
+    href: "https://www.natebjones.com",
+    description: "Nate's website, the front door to all of it.",
+  },
+] as const;
+
 function LearnRouteView() {
   return (
     <WorkbenchPageShell
@@ -101,6 +134,38 @@ function LearnRouteView() {
           </WorkbenchSection>
         );
       })}
+
+      <WorkbenchSection
+        title="Nate, everywhere"
+        description="The rest of Nate's public surfaces — where the thinking behind these guides is published."
+      >
+        <div className="divide-y divide-border border-y border-border">
+          {NATE_SURFACES.map((surface, index) => (
+            <a
+              key={surface.href}
+              href={surface.href}
+              target="_blank"
+              rel="noreferrer"
+              className="group grid gap-3 py-5 sm:grid-cols-[2.25rem_minmax(0,1fr)_auto] sm:items-start"
+            >
+              <span className="pt-0.5 font-mono text-[10px] text-muted-foreground/55">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <span className="min-w-0">
+                <span className="font-black tracking-[-0.01em] text-foreground group-hover:text-[var(--unlock-cyan)]">
+                  {surface.title}
+                </span>
+                <span className="mt-1 block max-w-3xl text-sm leading-6 text-muted-foreground">
+                  {surface.description}
+                </span>
+              </span>
+              <span className="inline-flex items-center gap-1 text-[10px] font-black tracking-[0.07em] text-muted-foreground uppercase group-hover:text-[var(--unlock-cyan)]">
+                Open <ArrowUpRightIcon className="size-3" />
+              </span>
+            </a>
+          ))}
+        </div>
+      </WorkbenchSection>
     </WorkbenchPageShell>
   );
 }

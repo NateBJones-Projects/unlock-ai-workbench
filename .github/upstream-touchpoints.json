@@ -1,0 +1,96 @@
+{
+  "description": "Fork-modified files where upstream T3 Code changes are most likely to collide with the Unlock AI Workbench layer. Consumed by .github/workflows/upstream-watch.yml and cross-referenced by .github/workflows/upstream-sync.yml. Paths may be files or directory prefixes (git pathspec).",
+  "upstream": "pingdotgg/t3code",
+  "forkBase": "a8cd2ad2",
+  "verifiedBy": "git log --oneline a8cd2ad2..HEAD -- <path> (every entry has at least one fork commit)",
+  "paths": [
+    {
+      "path": "apps/server/src/ws.ts",
+      "why": "Ringer RPC handler block and handler signature changes in the WebSocket server"
+    },
+    {
+      "path": "apps/server/src/server.ts",
+      "why": "Ringer service wiring added to the server layer composition"
+    },
+    {
+      "path": "apps/server/src/atomicWrite.ts",
+      "why": "Fork-adjusted atomic write behavior used by workbench persistence"
+    },
+    {
+      "path": "apps/server/src/auth/RpcAuthorization.ts",
+      "why": "Authorization entries for the Ringer RPC surface"
+    },
+    {
+      "path": "apps/server/src/mcp/McpHttpServer.ts",
+      "why": "Mounts the Ringer MCP toolkit on the HTTP MCP server"
+    },
+    {
+      "path": "apps/server/src/mcp/McpInvocationContext.ts",
+      "why": "Invocation context extended for Ringer toolkit calls"
+    },
+    {
+      "path": "apps/server/src/mcp/McpSessionRegistry.ts",
+      "why": "Session registry adjusted for the Ringer toolkit"
+    },
+    {
+      "path": "apps/web/src/components/AgentsPanel.tsx",
+      "why": "Workbench agents panel rework on top of the upstream panel"
+    },
+    {
+      "path": "apps/web/src/components/ChatView.tsx",
+      "why": "Workbench hooks and quick-action integration in the chat surface"
+    },
+    {
+      "path": "apps/web/src/components/chat/ChatHeader.tsx",
+      "why": "Workbench header actions added to the upstream chat header"
+    },
+    {
+      "path": "apps/web/src/components/sidebar/SidebarChrome.tsx",
+      "why": "Workbench sidebar chrome and branding changes"
+    },
+    {
+      "path": "apps/web/src/components/Sidebar.tsx",
+      "why": "Workbench entry added to the legacy sidebar"
+    },
+    {
+      "path": "apps/web/src/components/SidebarV2.tsx",
+      "why": "Workbench entry added to the v2 sidebar"
+    },
+    {
+      "path": "apps/web/src/components/CommandPalette.tsx",
+      "why": "Workbench quick actions surfaced in the command palette"
+    },
+    {
+      "path": "apps/web/src/components/settings/SettingsPanels.tsx",
+      "why": "Workbench settings additions to the upstream settings panels"
+    },
+    {
+      "path": "apps/web/index.html",
+      "why": "Workbench identity and branding in the web app shell"
+    },
+    {
+      "path": "packages/shared/src/projectScripts.ts",
+      "why": "Fork changes to project script handling"
+    },
+    {
+      "path": "packages/contracts/src/settings.ts",
+      "why": "Settings contract tweak for the workbench layer"
+    },
+    {
+      "path": "scripts/build-desktop-artifact.ts",
+      "why": "Bundles the Ringer runtime into the desktop artifact"
+    },
+    {
+      "path": "apps/desktop/src",
+      "why": "Desktop identity files (app name, backend configuration, Ringer runtime digest)"
+    },
+    {
+      "path": "package.json",
+      "why": "Fork identity, version, and scripts at the workspace root"
+    },
+    {
+      "path": "START-WORKBENCH.command",
+      "why": "Fork-only launcher entrypoint referenced by onboarding"
+    }
+  ]
+}

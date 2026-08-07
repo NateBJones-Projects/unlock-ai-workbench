@@ -48,12 +48,24 @@ Unlock AI Workbench is transparently powered by the open-source [T3 Code](https:
 
 The T3 Code foundation remains under its original [MIT license](./LICENSE). Ringer/Ringside ships with its PolyForm Shield terms, required copyright notice, and Nate Jones Media's separate product-specific authorization for Unlock AI Workbench. See [Third-party notices](./THIRD_PARTY_NOTICES.md) and [Ringer product authorization](./RINGER_PRODUCT_AUTHORIZATION.md).
 
+## Nate, everywhere
+
+The Workbench runs the skills; the thinking behind them is published on Nate's other surfaces.
+
+- [Unlock AI guides](https://unlock-ai.natebjones.com) — the published field-guide library this Workbench's catalog links back to.
+- [Nate's Newsletter on Substack](https://natesnewsletter.substack.com) — essays and analysis on AI strategy, the writing the guides grew out of.
+- [YouTube](https://www.youtube.com/@NateBJones) — video breakdowns of AI news, models, and working methods.
+- [AI News & Strategy Daily](https://podcasts.apple.com/us/podcast/ai-news-strategy-daily-with-nate-b-jones/id1877109372) — the daily podcast, for when you are away from a screen.
+- [TikTok](https://www.tiktok.com/@nate.b.jones) — short-form takes on what just changed in AI.
+- [natebjones.com](https://www.natebjones.com) — Nate's website, the front door to all of it.
+
 ## Documentation
 
 Full docs live in [docs/](./docs).
 
 - [Getting started — your first ten minutes](./docs/user/getting-started.md)
 - [Install and first run](./docs/user/install.md)
+- [Visual tour (screenshots of every surface)](./docs/user/visual-tour.md)
 - [Unlock AI Workbench local v1](./docs/unlock-ai-workbench-v1.md)
 - [Using Ringside](./docs/user/ringside.md)
 - [Permission modes](./docs/user/permission-modes.md)

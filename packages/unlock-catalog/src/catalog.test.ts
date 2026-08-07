@@ -62,6 +62,7 @@ describe("Unlock AI v1 catalog", () => {
       const markdown = renderSkillMarkdown(skill);
       expect(markdown.startsWith("---\nname: ")).toBe(true);
       expect(markdown).toContain('\ndescription: "');
+      expect(markdown).toContain(`\nx-unlock-pack: ${skill.id}@${skill.version}\n`);
       expect(markdown).toContain("\n## Requirements\n");
       expect(markdown).toContain("\n## Setup\n");
       expect(markdown).toContain("\n## Procedure\n");

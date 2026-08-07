@@ -1,0 +1,176 @@
+name: Unlock Catalog Sync
+
+on:
+  schedule:
+    # Daily at a quiet UTC hour.
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+
+# The Unlock AI source repository the catalog is hand-curated from.
+env:
+  UNLOCK_AI_REPOSITORY: NateBJones-Projects/unlock-ai
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: unlock-catalog-sync
+  cancel-in-progress: false
+
+jobs:
+  drift:
+    name: Detect catalog drift
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: |
+            args:
+              - --filter=@t3tools/unlock-catalog...
+
+      # actions/checkout cannot write outside the workspace, so the source
+      # lands in ./unlock-ai and UNLOCK_AI_SOURCE_ROOT points the check at it.
+      - name: Checkout Unlock AI source
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.UNLOCK_AI_REPOSITORY }}
+          token: ${{ secrets.UNLOCK_AI_SYNC_TOKEN }}
+          path: unlock-ai
+
+      - id: source
+        name: Record Unlock AI revision
+        run: echo "sha=$(git -C unlock-ai rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - id: drift
+        name: Check catalog drift
+        env:
+          UNLOCK_AI_SOURCE_ROOT: ${{ github.workspace }}/unlock-ai
+        run: |
+          set +e
+          report="$(node packages/unlock-catalog/scripts/check-source-drift.mjs --require --json)"
+          status=$?
+          set -e
+          echo "$report"
+          if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
+            exit "$status"
+          fi
+          echo "report=$report" >> "$GITHUB_OUTPUT"
+
+      - name: Sync catalog-drift issue
+        uses: actions/github-script@v8
+        env:
+          DRIFT_REPORT: ${{ steps.drift.outputs.report }}
+          UNLOCK_AI_SHA: ${{ steps.source.outputs.sha }}
+        with:
+          script: |
+            const report = JSON.parse(process.env.DRIFT_REPORT);
+            const label = "catalog-drift";
+            const title = "Unlock AI library drift detected";
+
+            const { data: labeled } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: label,
+              state: "open",
+              per_page: 100,
+            });
+            const openIssues = labeled.filter((issue) => !issue.pull_request);
+
+            if (!report.drifted) {
+              for (const issue of openIssues) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `Catalog matches the Unlock AI source again at \`${process.env.UNLOCK_AI_SHA}\`; closing.`,
+                });
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: "closed",
+                });
+              }
+              return;
+            }
+
+            const changed = report.sources.filter(
+              (source) => source.missing || source.actual !== source.expected,
+            );
+            const sourceLines = changed.map((source) =>
+              source.missing
+                ? `- **${source.label}** (\`${source.path}\`): missing from the source checkout (snapshot \`${source.expected}\`)`
+                : `- **${source.label}**: expected \`${source.expected}\`, actual \`${source.actual}\``,
+            );
+            const body = [
+              "The hand-curated catalog in `packages/unlock-catalog` no longer matches the Unlock AI source library.",
+              "",
+              `Checked \`${process.env.UNLOCK_AI_REPOSITORY}\` at \`${process.env.UNLOCK_AI_SHA}\`.`,
+              "",
+              "### Drifted sources",
+              "",
+              ...sourceLines,
+              "",
+              "### Updating the catalog",
+              "",
+              "- [ ] Review the upstream diff for the drifted files",
+              "- [ ] Update blueprint, guide, and skill data in `packages/unlock-catalog/src`",
+              "- [ ] Re-pin the hashes in `packages/unlock-catalog/src/sourceSnapshot.ts`",
+              "- [ ] Update the catalog tests",
+              "- [ ] Bump the catalog version in `packages/unlock-catalog/src/catalog.ts`",
+              "",
+              "Detection is automated; catalog edits stay a reviewed change. See `docs/operations/catalog-sync.md`.",
+            ].join("\n");
+
+            const existing = openIssues[0];
+            if (existing) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                title,
+                body,
+              });
+              return;
+            }
+
+            try {
+              await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: label,
+              });
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: label,
+                color: "b60205",
+                description: "Unlock AI source library changed since the catalog snapshot.",
+              });
+            }
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: [label],
+            });
