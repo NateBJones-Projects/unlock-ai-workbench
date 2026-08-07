@@ -22,12 +22,42 @@ import {
   formatSubagentTokenCount,
 } from "@t3tools/client-runtime/state/subagentRuntime";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { Bot, Braces, Check, ChevronDown, ChevronRight, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import {
+  Bot,
+  Braces,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  FileCheck2,
+  FileText,
+  ScrollText,
+  Square,
+  X,
+} from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
 import { orchestrationEnvironment } from "~/state/orchestration";
 import { ScrollArea } from "~/components/ui/scroll-area";
+
+export interface AgentsPanelPresentation {
+  readonly emptyTitle?: string;
+  readonly emptyDescription?: string;
+  readonly workflowSectionLabel?: string;
+  readonly directAgentsLabel?: string;
+  readonly showWorkerEvidence?: boolean;
+  readonly stopScope?: "run" | "thread";
+}
+
+export interface AgentsPanelControls {
+  readonly stoppingAll?: boolean;
+  readonly stoppingRunId?: string | null;
+  readonly onStopWorkflow?: (group: AgentPanelWorkflowGroup) => void | Promise<void>;
+  readonly onOpenArtifact?: (relativePath: string) => void;
+}
+
+const DEFAULT_PRESENTATION: AgentsPanelPresentation = {};
+const DEFAULT_CONTROLS: AgentsPanelControls = {};
 
 /**
  * In-flight states all present as Working (one steady state, per the
@@ -136,8 +166,116 @@ function agentActivityText(agent: RuntimeSubagent): string | null {
   );
 }
 
-/** Flat, non-interactive agent status line. No unfold. */
-function AgentRow({ agent }: { agent: RuntimeSubagent }) {
+type WorkerEvidenceTab = "log" | "proof" | "artifact";
+
+/**
+ * Evidence is mounted only after the user asks for it. Native providers expose
+ * a bounded recent-activity log, result/error proof, and optional output file;
+ * a Ringer projection can populate the same fields without changing this UI.
+ */
+function WorkerEvidence({
+  agent,
+  onOpenArtifact,
+}: {
+  readonly agent: RuntimeSubagent;
+  readonly onOpenArtifact?: ((relativePath: string) => void) | undefined;
+}) {
+  const [tab, setTab] = useState<WorkerEvidenceTab>("log");
+  const tabs = [
+    { id: "log" as const, label: "Log", icon: ScrollText },
+    { id: "proof" as const, label: "Proof", icon: FileCheck2 },
+    { id: "artifact" as const, label: "Artifact", icon: FileText },
+  ];
+  return (
+    <div className="mx-1.5 mb-1 rounded-md border border-border/60 bg-background/55">
+      <div className="flex items-center gap-1 border-b border-border/50 p-1" role="tablist">
+        {tabs.map((entry) => {
+          const Icon = entry.icon;
+          return (
+            <button
+              key={entry.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === entry.id}
+              onClick={() => setTab(entry.id)}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[.65rem] text-muted-foreground hover:text-foreground",
+                tab === entry.id && "bg-accent text-foreground",
+              )}
+            >
+              <Icon aria-hidden className="size-3" />
+              {entry.label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="max-h-48 overflow-auto p-2 text-[.7rem] leading-relaxed">
+        {tab === "log" ? (
+          agent.recentActivity.length > 0 ? (
+            <ol className="space-y-1 font-mono text-muted-foreground">
+              {agent.recentActivity.map((entry) => (
+                <li
+                  key={`${entry.at}:${entry.summary}`}
+                  className="grid grid-cols-[4.5rem_1fr] gap-2"
+                >
+                  <time className="text-muted-foreground/60">
+                    {new Date(entry.at).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    })}
+                  </time>
+                  <span className="break-words text-foreground/85">{entry.summary}</span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="text-muted-foreground">No retained worker log is available.</p>
+          )
+        ) : tab === "proof" ? (
+          agent.error || agent.result ? (
+            <p
+              className={cn(
+                "whitespace-pre-wrap break-words",
+                agent.error ? "text-destructive-foreground" : "text-foreground/90",
+              )}
+            >
+              {agent.error ?? agent.result}
+            </p>
+          ) : (
+            <p className="text-muted-foreground">
+              This worker has not published structured proof yet.
+            </p>
+          )
+        ) : agent.outputFile ? (
+          <button
+            type="button"
+            disabled={!onOpenArtifact}
+            onClick={() => onOpenArtifact?.(agent.outputFile!)}
+            className="inline-flex max-w-full items-center gap-1.5 font-mono text-[var(--unlock-cyan)] disabled:cursor-default disabled:text-muted-foreground"
+          >
+            <FileText aria-hidden className="size-3.5 shrink-0" />
+            <span className="truncate">{agent.outputFile}</span>
+          </button>
+        ) : (
+          <p className="text-muted-foreground">This worker has not declared an artifact.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Stable three-line row; optional evidence expands below without reshuffling the row itself. */
+function AgentRow({
+  agent,
+  showEvidence = false,
+  onOpenArtifact,
+}: {
+  readonly agent: RuntimeSubagent;
+  readonly showEvidence?: boolean | undefined;
+  readonly onOpenArtifact?: ((relativePath: string) => void) | undefined;
+}) {
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
   const visuals = STATUS_VISUALS[agent.status];
   const activity = agentActivityText(agent);
   const modelLabel = formatSubagentModelLabel(agent.model, agent.effort);
@@ -153,38 +291,54 @@ function AgentRow({ agent }: { agent: RuntimeSubagent }) {
   ].filter((value): value is string => value !== null);
 
   return (
-    <div className="grid h-[3.875rem] grid-cols-[0.375rem_minmax(0,1fr)_auto] grid-rows-[1.25rem_1.125rem_1rem] items-center gap-x-2 rounded-md px-1.5 py-1">
-      <span className="col-start-1 row-start-1 flex items-center">
-        <StatusDot status={agent.status} />
-      </span>
-      <span className="col-start-2 row-start-1 flex min-w-0 items-baseline gap-2">
-        <span className="min-w-0 truncate text-sm font-medium">{agent.title}</span>
-        {role ? (
-          <span className="max-w-28 shrink-0 truncate rounded-sm border border-border/60 px-1 font-mono text-[.65rem] text-muted-foreground">
-            {role}
-          </span>
-        ) : null}
-      </span>
-      <span className="col-start-3 row-start-1 min-w-14 text-right font-mono text-[.7rem] text-muted-foreground/80">
-        <span className="inline-flex items-center gap-1">
-          <AgentElapsed agent={agent} />
-          {agent.status === "completed" ? (
-            <Check aria-hidden className="size-3 text-success" />
+    <div>
+      <div className="grid h-[3.875rem] grid-cols-[0.375rem_minmax(0,1fr)_auto] grid-rows-[1.25rem_1.125rem_1rem] items-center gap-x-2 rounded-md px-1.5 py-1">
+        <span className="col-start-1 row-start-1 flex items-center">
+          <StatusDot status={agent.status} />
+        </span>
+        <span className="col-start-2 row-start-1 flex min-w-0 items-baseline gap-2">
+          <span className="min-w-0 truncate text-sm font-medium">{agent.title}</span>
+          {role ? (
+            <span className="max-w-28 shrink-0 truncate rounded-sm border border-border/60 px-1 font-mono text-[.65rem] text-muted-foreground">
+              {role}
+            </span>
           ) : null}
         </span>
-      </span>
-      <span
-        className={cn(
-          "col-start-2 col-end-4 row-start-2 block truncate text-xs",
-          agent.status === "failed" ? "text-destructive-foreground" : "text-muted-foreground",
-        )}
-      >
-        {activity ?? visuals.label}
-      </span>
-      <span className="col-start-2 col-end-4 row-start-3 truncate font-mono text-[.7rem] tabular-nums text-muted-foreground/70">
-        {metadata.join(" · ")}
-      </span>
-      <span className="sr-only">{visuals.label}</span>
+        <span className="col-start-3 row-start-1 min-w-14 text-right font-mono text-[.7rem] text-muted-foreground/80">
+          <span className="inline-flex items-center gap-1">
+            <AgentElapsed agent={agent} />
+            {agent.status === "completed" ? (
+              <Check aria-hidden className="size-3 text-success" />
+            ) : null}
+          </span>
+        </span>
+        <span
+          className={cn(
+            "col-start-2 row-start-2 block truncate text-xs",
+            showEvidence ? "col-end-3" : "col-end-4",
+            agent.status === "failed" ? "text-destructive-foreground" : "text-muted-foreground",
+          )}
+        >
+          {activity ?? visuals.label}
+        </span>
+        {showEvidence ? (
+          <button
+            type="button"
+            aria-expanded={evidenceOpen}
+            onClick={() => setEvidenceOpen((value) => !value)}
+            className="col-start-3 row-start-2 rounded-sm px-1 font-mono text-[.65rem] text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            {evidenceOpen ? "Hide" : "Evidence"}
+          </button>
+        ) : null}
+        <span className="col-start-2 col-end-4 row-start-3 truncate font-mono text-[.7rem] tabular-nums text-muted-foreground/70">
+          {metadata.join(" · ")}
+        </span>
+        <span className="sr-only">{visuals.label}</span>
+      </div>
+      {showEvidence && evidenceOpen ? (
+        <WorkerEvidence agent={agent} onOpenArtifact={onOpenArtifact} />
+      ) : null}
     </div>
   );
 }
@@ -315,9 +469,13 @@ function WorkflowScriptView({
 function PhaseSection({
   phase,
   defaultOpen = false,
+  showWorkerEvidence = false,
+  onOpenArtifact,
 }: {
   phase: AgentPanelWorkflowGroup["phases"][number];
   defaultOpen?: boolean;
+  showWorkerEvidence?: boolean | undefined;
+  onOpenArtifact?: ((relativePath: string) => void) | undefined;
 }) {
   const [open, setOpen] = useState(defaultOpen || phase.state === "running");
   const previousState = useRef(phase.state);
@@ -366,7 +524,16 @@ function PhaseSection({
           </span>
         ) : null}
       </button>
-      {open ? phase.members.map((member) => <AgentRow key={member.id} agent={member} />) : null}
+      {open
+        ? phase.members.map((member) => (
+            <AgentRow
+              key={member.id}
+              agent={member}
+              showEvidence={showWorkerEvidence}
+              onOpenArtifact={onOpenArtifact}
+            />
+          ))
+        : null}
     </div>
   );
 }
@@ -376,11 +543,15 @@ function ExpandedWorkflowSection({
   group,
   environmentId,
   threadId,
+  presentation,
+  controls,
   onCollapse,
 }: {
   group: AgentPanelWorkflowGroup;
   environmentId: EnvironmentId | null;
   threadId: ThreadId | null;
+  presentation: AgentsPanelPresentation;
+  controls: AgentsPanelControls;
   onCollapse: () => void;
 }) {
   const [scriptOpen, setScriptOpen] = useState(false);
@@ -394,6 +565,8 @@ function ExpandedWorkflowSection({
   ).length;
   const scriptPath = group.workflow.runHandles?.scriptPath;
   const canShowScript = scriptPath !== undefined && environmentId !== null && threadId !== null;
+  const runId = group.workflow.runHandles?.runId ?? group.workflow.id;
+  const stopping = controls.stoppingAll === true || controls.stoppingRunId === runId;
   return (
     <section className="rounded-lg border border-border/50 bg-card/30 p-1.5">
       <div className="flex items-center gap-2 px-1.5 pt-0.5 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground">
@@ -417,6 +590,17 @@ function ExpandedWorkflowSection({
         <span className="ml-auto font-mono normal-case text-muted-foreground/80">
           {settled}/{members.length} settled
         </span>
+        {workflowIsLive(group) && controls.onStopWorkflow ? (
+          <button
+            type="button"
+            disabled={stopping}
+            onClick={() => void controls.onStopWorkflow?.(group)}
+            className="inline-flex items-center gap-1 rounded-sm border border-border/60 px-1 py-0.5 font-mono normal-case text-foreground hover:bg-accent disabled:opacity-60"
+          >
+            <Square aria-hidden className="size-2.5 fill-current" />
+            {stopping ? "Stopping…" : presentation.stopScope === "run" ? "Stop run" : "Stop all"}
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onCollapse}
@@ -436,13 +620,34 @@ function ExpandedWorkflowSection({
         />
       ) : null}
       {group.phases.map((phase) => (
-        <PhaseSection key={phase.index} phase={phase} defaultOpen={!workflowIsLive(group)} />
+        <PhaseSection
+          key={phase.index}
+          phase={phase}
+          defaultOpen={!workflowIsLive(group)}
+          showWorkerEvidence={presentation.showWorkerEvidence}
+          onOpenArtifact={controls.onOpenArtifact}
+        />
       ))}
       {group.unphasedMembers.map((member) => (
-        <AgentRow key={member.id} agent={member} />
+        <AgentRow
+          key={member.id}
+          agent={member}
+          showEvidence={presentation.showWorkerEvidence}
+          onOpenArtifact={controls.onOpenArtifact}
+        />
       ))}
       {group.phases.length === 0 && group.unphasedMembers.length === 0 ? (
-        <AgentRow agent={group.workflow} />
+        <AgentRow
+          agent={group.workflow}
+          showEvidence={presentation.showWorkerEvidence}
+          onOpenArtifact={controls.onOpenArtifact}
+        />
+      ) : null}
+      {presentation.showWorkerEvidence && workflowIsLive(group) ? (
+        <p className="px-1.5 pb-1 pt-1 text-[.65rem] text-muted-foreground/70">
+          Pause and single-worker retry are not supported by this runtime. Stop ends the active run
+          scope shown above.
+        </p>
       ) : null}
     </section>
   );
@@ -500,10 +705,14 @@ function WorkflowSection({
   group,
   environmentId,
   threadId,
+  presentation,
+  controls,
 }: {
   group: AgentPanelWorkflowGroup;
   environmentId: EnvironmentId | null;
   threadId: ThreadId | null;
+  presentation: AgentsPanelPresentation;
+  controls: AgentsPanelControls;
 }) {
   const [open, setOpen] = useState(() => workflowIsLive(group));
   return open ? (
@@ -511,6 +720,8 @@ function WorkflowSection({
       group={group}
       environmentId={environmentId}
       threadId={threadId}
+      presentation={presentation}
+      controls={controls}
       onCollapse={() => setOpen(false)}
     />
   ) : (
@@ -522,19 +733,25 @@ export function AgentsPanel({
   model,
   environmentId = null,
   threadId = null,
+  presentation = DEFAULT_PRESENTATION,
+  controls = DEFAULT_CONTROLS,
+  leadingContent = null,
 }: {
   model: AgentPanelModel;
   environmentId?: EnvironmentId | null;
   threadId?: ThreadId | null;
+  presentation?: AgentsPanelPresentation;
+  controls?: AgentsPanelControls;
+  leadingContent?: ReactNode;
 }) {
-  if (!model.hasAgents) {
+  if (!model.hasAgents && leadingContent === null) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
         <Bot aria-hidden className="size-6 text-muted-foreground/60" />
-        <p className="text-sm font-medium">No agents yet</p>
+        <p className="text-sm font-medium">{presentation.emptyTitle ?? "No agents yet"}</p>
         <p className="max-w-56 text-xs text-muted-foreground">
-          When this thread spawns subagents or runs a workflow, they show up here with live status,
-          activity, and token usage.
+          {presentation.emptyDescription ??
+            "When this thread spawns subagents or runs a workflow, they show up here with live status, activity, and token usage."}
         </p>
       </div>
     );
@@ -544,38 +761,57 @@ export function AgentsPanel({
     <div className="flex h-full min-h-0 flex-col">
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-2 p-2">
-          {model.workflows.map((group) => (
-            <WorkflowSection
-              key={group.workflow.id}
-              group={group}
-              environmentId={environmentId}
-              threadId={threadId}
-            />
-          ))}
+          {leadingContent}
+          {model.workflows.length > 0 ? (
+            <section className="flex flex-col gap-2">
+              {presentation.workflowSectionLabel ? (
+                <div className="px-1.5 pt-1 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+                  {presentation.workflowSectionLabel}
+                </div>
+              ) : null}
+              {model.workflows.map((group) => (
+                <WorkflowSection
+                  key={group.workflow.id}
+                  group={group}
+                  environmentId={environmentId}
+                  threadId={threadId}
+                  presentation={presentation}
+                  controls={controls}
+                />
+              ))}
+            </section>
+          ) : null}
           {model.directAgents.length > 0 ? (
             <section>
               <div className="px-1.5 pt-1 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground">
-                Direct spawns
+                {presentation.directAgentsLabel ?? "Direct spawns"}
               </div>
               {model.directAgents.map((agent) => (
-                <AgentRow key={agent.id} agent={agent} />
+                <AgentRow
+                  key={agent.id}
+                  agent={agent}
+                  showEvidence={presentation.showWorkerEvidence}
+                  onOpenArtifact={controls.onOpenArtifact}
+                />
               ))}
             </section>
           ) : null}
         </div>
       </ScrollArea>
-      <footer className="flex items-center justify-between border-t border-border/60 px-3 py-1.5 font-mono text-[.7rem] text-muted-foreground">
-        <span className="flex items-center gap-2">
-          {model.runningCount + model.waitingCount > 0 ? (
-            <span className="text-info-foreground">
-              ● {model.runningCount + model.waitingCount} working
-            </span>
-          ) : null}
-          {model.idleCount > 0 ? <span>{model.idleCount} idle</span> : null}
-          {model.settledCount > 0 ? <span>{model.settledCount} settled</span> : null}
-        </span>
-        <span className="tabular-nums">Σ {formatSubagentTokenCount(model.totalTokens)} tok</span>
-      </footer>
+      {model.hasAgents ? (
+        <footer className="flex items-center justify-between border-t border-border/60 px-3 py-1.5 font-mono text-[.7rem] text-muted-foreground">
+          <span className="flex items-center gap-2">
+            {model.runningCount + model.waitingCount > 0 ? (
+              <span className="text-info-foreground">
+                ● {model.runningCount + model.waitingCount} working
+              </span>
+            ) : null}
+            {model.idleCount > 0 ? <span>{model.idleCount} idle</span> : null}
+            {model.settledCount > 0 ? <span>{model.settledCount} settled</span> : null}
+          </span>
+          <span className="tabular-nums">Σ {formatSubagentTokenCount(model.totalTokens)} tok</span>
+        </footer>
+      ) : null}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import {
   projectScriptCwd,
@@ -99,18 +100,54 @@ describe("projectScripts helpers", () => {
       T3CODE_PROJECT_ROOT: "/repo",
       T3CODE_WORKTREE_PATH: "/repo/worktree-a",
     });
+    expect(env.T3CODE_ENVIRONMENT_ID).toBeUndefined();
+    expect(env.T3CODE_THREAD_ID).toBeUndefined();
+    expect(env.T3CODE_PROJECT_ID).toBeUndefined();
+    expect(env.T3CODE_ACTION_ID).toBeUndefined();
+    expect(env.T3CODE_ACTION_SOURCE).toBeUndefined();
+  });
+
+  it("adds non-secret thread context for direct actions", () => {
+    const env = projectScriptRuntimeEnv({
+      project: { cwd: "/repo" },
+      actionContext: {
+        environmentId: EnvironmentId.make("environment-local"),
+        threadId: ThreadId.make("thread-a"),
+        projectId: ProjectId.make("project-a"),
+        actionId: "test",
+      },
+    });
+
+    expect(env).toMatchObject({
+      T3CODE_PROJECT_ROOT: "/repo",
+      T3CODE_ENVIRONMENT_ID: "environment-local",
+      T3CODE_THREAD_ID: "thread-a",
+      T3CODE_PROJECT_ID: "project-a",
+      T3CODE_ACTION_ID: "test",
+      T3CODE_ACTION_SOURCE: "workbench",
+    });
   });
 
   it("allows overriding runtime env values", () => {
     const env = projectScriptRuntimeEnv({
       project: { cwd: "/repo" },
+      actionContext: {
+        environmentId: EnvironmentId.make("environment-local"),
+        threadId: ThreadId.make("thread-a"),
+        projectId: ProjectId.make("project-a"),
+        actionId: "test",
+      },
       extraEnv: {
         T3CODE_PROJECT_ROOT: "/custom-root",
+        T3CODE_ACTION_ID: "custom-action",
+        T3CODE_ACTION_SOURCE: "custom-source",
         CUSTOM_FLAG: "1",
       },
     });
 
     expect(env.T3CODE_PROJECT_ROOT).toBe("/custom-root");
+    expect(env.T3CODE_ACTION_ID).toBe("custom-action");
+    expect(env.T3CODE_ACTION_SOURCE).toBe("custom-source");
     expect(env.CUSTOM_FLAG).toBe("1");
     expect(env.T3CODE_WORKTREE_PATH).toBeUndefined();
   });

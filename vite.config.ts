@@ -38,6 +38,8 @@ export default defineConfig({
       "**/routeTree.gen.ts",
       "apps/mobile/android/**",
       "apps/mobile/ios/**",
+      // Pinned third-party runtime: formatting any byte invalidates runtime-lock.json.
+      "apps/desktop/resources/ringer/**",
       "apps/web/public/mockServiceWorker.js",
       "apps/web/src/lib/vendor/qrcodegen.ts",
       "apps/mobile/uniwind-types.d.ts",

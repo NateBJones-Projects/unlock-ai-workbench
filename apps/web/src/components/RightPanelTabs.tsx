@@ -1,6 +1,6 @@
 import type { ContextMenuItem, PreviewSessionSnapshot } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
-import { Bot, FileDiff, Files, Globe2, Plus, TerminalSquare, X } from "lucide-react";
+import { FileDiff, Files, Globe2, Plus, RadioTower, TerminalSquare, X } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   type ReactElement,
@@ -52,7 +52,7 @@ interface RightPanelTabsProps {
 }
 
 const SURFACE_DISABLED_REASONS = {
-  browser: "Browser previews are only available in the T3 Code desktop app.",
+  browser: "Browser previews are only available in the Unlock AI Workbench desktop app.",
   files: "Files are only available when a project is open.",
   diff: "Diff is only available for server threads in Git repositories.",
 } as const;
@@ -131,9 +131,9 @@ function RightPanelEmptyState(props: {
       onClick: props.onAddDiff,
     },
     {
-      label: "Agents",
-      description: "Watch subagents and workflows run.",
-      icon: Bot,
+      label: "Ringside",
+      description: "Monitor Ringer runs and native agents.",
+      icon: RadioTower,
       available: true,
       disabledReason: null,
       onClick: props.onAddAgents,
@@ -214,7 +214,7 @@ function surfaceTitle(
         getTerminalLabel(surface.activeTerminalId)
       );
     case "agents":
-      return "Agents";
+      return "Ringside";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -275,7 +275,7 @@ function SurfaceIcon({
     case "terminal":
       return <TerminalSquare className="size-3 shrink-0" />;
     case "agents":
-      return <Bot className="size-3 shrink-0" />;
+      return <RadioTower className="size-3 shrink-0" />;
   }
 }
 
@@ -477,8 +477,8 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     Diff
                   </SurfaceMenuItem>
                   <SurfaceMenuItem available onClick={props.onAddAgents}>
-                    <Bot />
-                    Agents
+                    <RadioTower />
+                    Ringside
                   </SurfaceMenuItem>
                 </MenuPopup>
               </Menu>

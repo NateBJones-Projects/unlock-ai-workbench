@@ -1,12 +1,20 @@
 import {
+  RINGER_WORKBENCH_DIAGNOSTIC_TEMPLATE_ID,
   type EnvironmentId,
   type EditorId,
+  type ProjectId,
   type ProjectScript,
   type ResolvedKeybindingsConfig,
+  type RingerTemplateId,
   type ThreadId,
 } from "@t3tools/contracts";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { memo } from "react";
+import { useAtomValue } from "@effect/atom-react";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
+import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { memo, useCallback, useMemo } from "react";
 import GitActionsControl from "../GitActionsControl";
 import { type DraftId } from "~/composerDraftStore";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -19,16 +27,24 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useT3ProjectFileScripts } from "~/hooks/useT3ProjectFileScripts";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { cn } from "~/lib/utils";
+import { WorkbenchQuickActions } from "../workbench/WorkbenchQuickActions";
+import { recordWorkbenchLaunch } from "../workbench/workbenchLaunchStore";
+import { useAtomCommand } from "~/state/use-atom-command";
+import { ringerEnvironment } from "~/state/ringer";
+import { useRightPanelStore } from "~/rightPanelStore";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
   activeThreadId: ThreadId;
   draftId?: DraftId;
   activeThreadTitle: string;
+  activeProjectId: ProjectId | undefined;
   activeProjectName: string | undefined;
   activeProjectCwd: string | null;
   openInCwd: string | null;
   activeProjectScripts: ReadonlyArray<ProjectScript> | undefined;
+  activeProviderName: string | null;
+  activeProviderSkillNames: ReadonlyArray<string>;
   preferredScriptId: string | null;
   keybindings: ResolvedKeybindingsConfig;
   availableEditors: ReadonlyArray<EditorId>;
@@ -61,10 +77,13 @@ export const ChatHeader = memo(function ChatHeader({
   activeThreadId,
   draftId,
   activeThreadTitle,
+  activeProjectId,
   activeProjectName,
   activeProjectCwd,
   openInCwd,
   activeProjectScripts,
+  activeProviderName,
+  activeProviderSkillNames,
   preferredScriptId,
   keybindings,
   availableEditors,
@@ -86,6 +105,53 @@ export const ChatHeader = memo(function ChatHeader({
     activeThreadEnvironmentId,
     primaryEnvironmentId,
   });
+  const detectedSkillNames = useMemo(
+    () => new Set(activeProviderSkillNames),
+    [activeProviderSkillNames],
+  );
+  const threadRef = useMemo(
+    () => scopeThreadRef(activeThreadEnvironmentId, activeThreadId),
+    [activeThreadEnvironmentId, activeThreadId],
+  );
+  const ringerCapabilities = useAtomValue(
+    ringerEnvironment.capabilities({
+      environmentId: activeThreadEnvironmentId,
+      input: { threadId: activeThreadId },
+    }),
+  );
+  const launchRinger = useAtomCommand(ringerEnvironment.launch, { reportFailure: false });
+  const ringerQuickActionCapability = useMemo(() => {
+    if (ringerCapabilities._tag !== "Success" || !ringerCapabilities.value.available) return null;
+    return {
+      launch: ringerCapabilities.value.operations.launch,
+      templates: ringerCapabilities.value.templates,
+    };
+  }, [ringerCapabilities]);
+  const handleRunRingerQuickAction = useCallback(
+    async (templateId: string) => {
+      if (templateId !== RINGER_WORKBENCH_DIAGNOSTIC_TEMPLATE_ID) {
+        throw new Error("This Ringer template is not approved for Workbench Quick Actions.");
+      }
+      const result = await launchRinger({
+        environmentId: activeThreadEnvironmentId,
+        input: { threadId: activeThreadId, templateId: templateId as RingerTemplateId },
+      });
+      if (result._tag === "Failure") {
+        if (isAtomCommandInterrupted(result)) return;
+        const error = squashAtomCommandFailure(result);
+        throw error instanceof Error ? error : new Error("Ringer did not start.");
+      }
+      recordWorkbenchLaunch(threadRef, {
+        kind: "ringer",
+        catalogId: templateId,
+        title: "Ringer Readiness Check",
+        version: "1",
+        strategy: "ringer",
+      });
+      useRightPanelStore.getState().open(threadRef, "agents");
+    },
+    [activeThreadEnvironmentId, activeThreadId, launchRinger, threadRef],
+  );
   return (
     <div className="@container/header-actions flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
@@ -140,6 +206,17 @@ export const ChatHeader = memo(function ChatHeader({
           rightPanelOpen ? "pr-0" : "pr-16",
         )}
       >
+        {activeProjectId && activeProjectScripts ? (
+          <WorkbenchQuickActions
+            projectRef={scopeProjectRef(activeThreadEnvironmentId, activeProjectId)}
+            scripts={activeProjectScripts}
+            detectedSkillNames={detectedSkillNames}
+            providerName={activeProviderName}
+            ringer={ringerQuickActionCapability}
+            onRunScript={onRunProjectScript}
+            onRunRinger={handleRunRingerQuickAction}
+          />
+        ) : null}
         {activeProjectScripts && (
           <ProjectScriptsControl
             scripts={activeProjectScripts}
@@ -163,7 +240,7 @@ export const ChatHeader = memo(function ChatHeader({
         {activeProjectName && (
           <GitActionsControl
             gitCwd={gitCwd}
-            activeThreadRef={scopeThreadRef(activeThreadEnvironmentId, activeThreadId)}
+            activeThreadRef={threadRef}
             {...(draftId ? { draftId } : {})}
           />
         )}

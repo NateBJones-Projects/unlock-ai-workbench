@@ -98,6 +98,7 @@ import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
+import * as RingerRunService from "./ringer/RingerRunService.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
@@ -349,6 +350,7 @@ function toAuthAccessStreamEvent(
 const makeWsRpcLayer = (
   currentSession: EnvironmentAuth.AuthenticatedSession,
   previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
+  ringerRunService: RingerRunService.RingerRunService["Service"],
 ) =>
   WsRpcGroup.toLayer(
     Effect.gen(function* () {
@@ -1991,6 +1993,50 @@ const makeWsRpcLayer = (
           observeRpcStream(WS_METHODS.subscribePreviewEvents, previewManager.events, {
             "rpc.aggregate": "preview",
           }),
+        [WS_METHODS.ringerGetCapabilities]: (input) =>
+          observeRpcEffect(WS_METHODS.ringerGetCapabilities, ringerRunService.capabilities(input), {
+            "rpc.aggregate": "ringer",
+          }),
+        [WS_METHODS.ringerListRuns]: (input) =>
+          observeRpcEffect(WS_METHODS.ringerListRuns, ringerRunService.list(input), {
+            "rpc.aggregate": "ringer",
+          }),
+        [WS_METHODS.ringerLaunch]: (input) =>
+          observeRpcEffect(WS_METHODS.ringerLaunch, ringerRunService.launch(input), {
+            "rpc.aggregate": "ringer",
+          }),
+        [WS_METHODS.ringerGetStatus]: (input) =>
+          observeRpcEffect(WS_METHODS.ringerGetStatus, ringerRunService.status(input), {
+            "rpc.aggregate": "ringer",
+          }),
+        [WS_METHODS.ringerCancel]: (input) =>
+          observeRpcEffect(WS_METHODS.ringerCancel, ringerRunService.cancel(input), {
+            "rpc.aggregate": "ringer",
+          }),
+        [WS_METHODS.ringerRetry]: (input) =>
+          observeRpcEffect(WS_METHODS.ringerRetry, ringerRunService.retry(input), {
+            "rpc.aggregate": "ringer",
+          }),
+        [WS_METHODS.ringerGate]: (input) =>
+          observeRpcEffect(WS_METHODS.ringerGate, ringerRunService.gate(input), {
+            "rpc.aggregate": "ringer",
+          }),
+        [WS_METHODS.ringerGetProof]: (input) =>
+          observeRpcEffect(WS_METHODS.ringerGetProof, ringerRunService.proof(input), {
+            "rpc.aggregate": "ringer",
+          }),
+        [WS_METHODS.ringerListArtifacts]: (input) =>
+          observeRpcEffect(WS_METHODS.ringerListArtifacts, ringerRunService.listArtifacts(input), {
+            "rpc.aggregate": "ringer",
+          }),
+        [WS_METHODS.ringerReadArtifact]: (input) =>
+          observeRpcEffect(WS_METHODS.ringerReadArtifact, ringerRunService.readArtifact(input), {
+            "rpc.aggregate": "ringer",
+          }),
+        [WS_METHODS.subscribeRingerRuns]: (input) =>
+          observeRpcStream(WS_METHODS.subscribeRingerRuns, ringerRunService.observe(input), {
+            "rpc.aggregate": "ringer",
+          }),
         [WS_METHODS.subscribeDiscoveredLocalServers]: (_input) =>
           observeRpcStream(
             WS_METHODS.subscribeDiscoveredLocalServers,
@@ -2138,6 +2184,7 @@ const makeWsRpcLayer = (
 export const websocketRpcRouteLayer = Layer.unwrap(
   Effect.gen(function* () {
     const previewAutomationBroker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
+    const ringerRunService = yield* RingerRunService.RingerRunService;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     return HttpRouter.add(
       "GET",
@@ -2158,7 +2205,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
           disableTracing: true,
         }).pipe(
           Effect.provide(
-            makeWsRpcLayer(session, previewAutomationBroker).pipe(
+            makeWsRpcLayer(session, previewAutomationBroker, ringerRunService).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
               Layer.provide(ProviderMaintenanceRunner.layer),
               Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),

@@ -5,6 +5,7 @@ import * as Path from "effect/Path";
 export const writeFileStringAtomically = (input: {
   readonly filePath: string;
   readonly contents: string;
+  readonly mode?: number;
 }) =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -19,7 +20,16 @@ export const writeFileStringAtomically = (input: {
       });
       const tempPath = path.join(tempDirectory, "contents.tmp");
 
-      yield* fs.writeFileString(tempPath, input.contents);
+      yield* fs.writeFileString(
+        tempPath,
+        input.contents,
+        input.mode === undefined ? undefined : { mode: input.mode },
+      );
+      if (input.mode !== undefined) {
+        // Set the final permissions before the rename so the target is never
+        // visible with broader permissions, even for a single filesystem tick.
+        yield* fs.chmod(tempPath, input.mode);
+      }
       yield* fs.rename(tempPath, input.filePath);
     }),
   );

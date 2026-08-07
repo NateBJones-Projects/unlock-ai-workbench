@@ -187,6 +187,7 @@ import {
 } from "./Sidebar.logic";
 import { sortThreads } from "../lib/threadSort";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { WorkbenchPrimaryNav } from "./workbench/WorkbenchPrimaryNav";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useIsMobile } from "~/hooks/useMediaQuery";
 import { CommandDialogTrigger } from "./ui/command";
@@ -2825,6 +2826,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
       className="gap-0"
       fixedHeader={
         <SidebarGroup className="px-2 pt-2 pb-1">
+          <WorkbenchPrimaryNav />
           <SidebarMenu>
             <SidebarMenuItem>
               <CommandDialogTrigger

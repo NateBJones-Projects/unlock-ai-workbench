@@ -144,7 +144,8 @@ import {
   usePreviewMiniPlayerStore,
 } from "../previewMiniPlayerStore";
 import { RightPanelTabs } from "./RightPanelTabs";
-import { AgentsPanel } from "./AgentsPanel";
+import { WorkbenchRingsidePanel } from "./workbench/WorkbenchRingsidePanel";
+import { recordWorkbenchLaunch } from "./workbench/workbenchLaunchStore";
 import {
   deriveAgentPanelModel,
   foldSubagentActivities,
@@ -2498,6 +2499,13 @@ function ChatViewContent(props: ChatViewProps) {
     const defaultInstanceId = defaultInstanceIdForDriver(selectedProvider);
     return providerStatuses.find((status) => status.instanceId === defaultInstanceId) ?? null;
   }, [activeProviderInstanceId, providerStatuses, selectedProvider]);
+  const activeProviderSkillNames = useMemo(
+    () =>
+      (activeProviderStatus?.skills ?? EMPTY_PROVIDER_SKILLS)
+        .filter((skill) => skill.enabled)
+        .map((skill) => skill.name),
+    [activeProviderStatus],
+  );
   const providerStatusBannerKey = getProviderStatusBannerKey(activeProviderStatus);
   const [dismissedProviderStatusBannerKey, setDismissedProviderStatusBannerKey] = useState<
     string | null
@@ -2825,6 +2833,19 @@ function ChatViewContent(props: ChatViewProps) {
       },
     ) => {
       if (!activeThreadId || !activeProject || !activeThread) return;
+      if (activeThreadRef) {
+        recordWorkbenchLaunch(activeThreadRef, {
+          kind: "shell",
+          catalogId: script.id,
+          title: script.name,
+          version: null,
+          strategy: "project-shell",
+        });
+        // Workbench Actions always surface the thread-scoped operations view.
+        // The command remains visible in the terminal; Ringside is where any
+        // native/Ringer workers and durable evidence appear.
+        useRightPanelStore.getState().open(activeThreadRef, "agents");
+      }
       if (options?.rememberAsLastInvoked !== false) {
         setLastInvokedScriptByProjectId((current) => {
           if (current[activeProject.id] === script.id) return current;
@@ -2855,6 +2876,12 @@ function ChatViewContent(props: ChatViewProps) {
           cwd: activeProject.workspaceRoot,
         },
         worktreePath: targetWorktreePath,
+        actionContext: {
+          environmentId: activeThread.environmentId,
+          threadId: activeThreadId,
+          projectId: activeProject.id,
+          actionId: script.id,
+        },
         ...(options?.env ? { extraEnv: options.env } : {}),
       });
       const targetTerminalId = shouldCreateNewTerminal
@@ -5891,10 +5918,12 @@ function ChatViewContent(props: ChatViewProps) {
         />
       </Suspense>
     ) : activeRightPanelSurface?.kind === "agents" ? (
-      <AgentsPanel
+      <WorkbenchRingsidePanel
         model={agentPanelModel}
-        environmentId={activeThreadRef?.environmentId ?? null}
-        threadId={activeThreadRef?.threadId ?? null}
+        threadRef={activeThreadRef}
+        stopping={isStoppingBackgroundWork}
+        onStopActiveWork={isWorking ? onInterrupt : handleStopBackgroundWork}
+        onOpenArtifact={openFileSurface}
       />
     ) : (activeRightPanelSurface?.kind === "files" || activeRightPanelSurface?.kind === "file") &&
       activeProject &&
@@ -5953,10 +5982,13 @@ function ChatViewContent(props: ChatViewProps) {
             activeThreadId={activeThread.id}
             {...(routeKind === "draft" && draftId ? { draftId } : {})}
             activeThreadTitle={activeThread.title}
+            activeProjectId={activeProject?.id}
             activeProjectName={activeProject?.title}
             activeProjectCwd={activeProject?.workspaceRoot ?? null}
             openInCwd={gitCwd}
             activeProjectScripts={activeProject?.scripts}
+            activeProviderName={activeProviderStatus?.displayName ?? null}
+            activeProviderSkillNames={activeProviderSkillNames}
             preferredScriptId={
               activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
             }

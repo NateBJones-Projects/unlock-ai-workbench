@@ -124,6 +124,8 @@ export const make = Effect.gen(function* () {
       applicationName: environment.displayName,
       applicationVersion: environment.appVersion,
       version: Option.getOrElse(commitHash, () => "unknown"),
+      copyright: "Unlock AI by Nate B. Jones",
+      credits: "Powered by T3 Code — MIT licensed open source",
     });
 
     if (environment.platform === "win32") {

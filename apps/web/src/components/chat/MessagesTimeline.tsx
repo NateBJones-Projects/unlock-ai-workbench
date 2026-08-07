@@ -2109,7 +2109,7 @@ const stopRowToggle = (e: { stopPropagation: () => void }) => e.stopPropagation(
 /**
  * A1 spawn CTA: one anchored row per workflow run (or per-turn direct-spawn
  * batch). Live status is derived from the shared agent panel model at render
- * time — the row itself never re-renders a roster; the Agents panel is the
+ * time — the row itself never re-renders a roster; Ringside is the
  * only roster. Freezes to past tense when every member settles. Static dot,
  * no animation.
  */
@@ -2194,7 +2194,7 @@ const AgentSpawnCtaRow = memo(function AgentSpawnCtaRow(props: { workEntry: Time
         {totalTokens > 0 ? (
           <span className="tabular-nums">Σ {formatSubagentTokenCount(totalTokens)}</span>
         ) : null}
-        <span className="text-info-foreground">{live ? "Open Agents ▸" : "View ▸"}</span>
+        <span className="text-info-foreground">{live ? "Open Ringside ▸" : "View ▸"}</span>
       </span>
     </button>
   );

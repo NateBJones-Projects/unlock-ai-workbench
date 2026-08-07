@@ -152,6 +152,26 @@ import {
   ResourceTelemetryRetryResult,
   ResourceTelemetrySnapshot,
 } from "./resourceTelemetry.ts";
+import {
+  RingerArtifactContent,
+  RingerArtifactList,
+  RingerArtifactListInput,
+  RingerArtifactReadInput,
+  RingerCapabilitiesInput,
+  RingerCapabilitySnapshot,
+  RingerError,
+  RingerGateInput,
+  RingerLaunchInput,
+  RingerProofInput,
+  RingerProofDetail,
+  RingerProofSummary,
+  RingerRetryInput,
+  RingerRunProjection,
+  RingerRunTargetInput,
+  RingerThreadEvent,
+  RingerThreadInput,
+  RingerThreadRunList,
+} from "./ringer.ts";
 import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.ts";
 import {
   SourceControlCloneRepositoryInput,
@@ -223,6 +243,18 @@ export const WS_METHODS = {
   previewAutomationRespond: "previewAutomation.respond",
   previewAutomationFocusHost: "previewAutomation.focusHost",
 
+  // Thread-scoped Ringer methods
+  ringerGetCapabilities: "ringer.getCapabilities",
+  ringerListRuns: "ringer.listRuns",
+  ringerLaunch: "ringer.launch",
+  ringerGetStatus: "ringer.getStatus",
+  ringerCancel: "ringer.cancel",
+  ringerRetry: "ringer.retry",
+  ringerGate: "ringer.gate",
+  ringerGetProof: "ringer.getProof",
+  ringerListArtifacts: "ringer.listArtifacts",
+  ringerReadArtifact: "ringer.readArtifact",
+
   // Server meta
   serverProbe: "server.probe",
   serverGetConfig: "server.getConfig",
@@ -265,6 +297,7 @@ export const WS_METHODS = {
   subscribeAuthAccess: "subscribeAuthAccess",
   subscribeBackgroundPolicy: "subscribeBackgroundPolicy",
   subscribeResourceTelemetry: "subscribeResourceTelemetry",
+  subscribeRingerRuns: "subscribeRingerRuns",
 } as const;
 
 export const WsServerUpsertKeybindingRpc = Rpc.make(WS_METHODS.serverUpsertKeybinding, {
@@ -678,6 +711,75 @@ export const WsSubscribePreviewEventsRpc = Rpc.make(WS_METHODS.subscribePreviewE
   stream: true,
 });
 
+const RingerRpcError = Schema.Union([RingerError, EnvironmentAuthorizationError]);
+
+export const WsRingerGetCapabilitiesRpc = Rpc.make(WS_METHODS.ringerGetCapabilities, {
+  payload: RingerCapabilitiesInput,
+  success: RingerCapabilitySnapshot,
+  error: RingerRpcError,
+});
+
+export const WsRingerListRunsRpc = Rpc.make(WS_METHODS.ringerListRuns, {
+  payload: RingerThreadInput,
+  success: RingerThreadRunList,
+  error: RingerRpcError,
+});
+
+export const WsRingerLaunchRpc = Rpc.make(WS_METHODS.ringerLaunch, {
+  payload: RingerLaunchInput,
+  success: RingerRunProjection,
+  error: RingerRpcError,
+});
+
+export const WsRingerGetStatusRpc = Rpc.make(WS_METHODS.ringerGetStatus, {
+  payload: RingerRunTargetInput,
+  success: RingerRunProjection,
+  error: RingerRpcError,
+});
+
+export const WsRingerCancelRpc = Rpc.make(WS_METHODS.ringerCancel, {
+  payload: RingerRunTargetInput,
+  success: RingerRunProjection,
+  error: RingerRpcError,
+});
+
+export const WsRingerRetryRpc = Rpc.make(WS_METHODS.ringerRetry, {
+  payload: RingerRetryInput,
+  success: RingerRunProjection,
+  error: RingerRpcError,
+});
+
+export const WsRingerGateRpc = Rpc.make(WS_METHODS.ringerGate, {
+  payload: RingerGateInput,
+  success: RingerRunProjection,
+  error: RingerRpcError,
+});
+
+export const WsRingerGetProofRpc = Rpc.make(WS_METHODS.ringerGetProof, {
+  payload: RingerProofInput,
+  success: RingerProofDetail,
+  error: RingerRpcError,
+});
+
+export const WsRingerListArtifactsRpc = Rpc.make(WS_METHODS.ringerListArtifacts, {
+  payload: RingerArtifactListInput,
+  success: RingerArtifactList,
+  error: RingerRpcError,
+});
+
+export const WsRingerReadArtifactRpc = Rpc.make(WS_METHODS.ringerReadArtifact, {
+  payload: RingerArtifactReadInput,
+  success: RingerArtifactContent,
+  error: RingerRpcError,
+});
+
+export const WsSubscribeRingerRunsRpc = Rpc.make(WS_METHODS.subscribeRingerRuns, {
+  payload: RingerThreadInput,
+  success: RingerThreadEvent,
+  error: RingerRpcError,
+  stream: true,
+});
+
 export const WsSubscribeDiscoveredLocalServersRpc = Rpc.make(
   WS_METHODS.subscribeDiscoveredLocalServers,
   {
@@ -870,6 +972,17 @@ export const WsRpcGroup = RpcGroup.make(
   WsPreviewAutomationRespondRpc,
   WsPreviewAutomationFocusHostRpc,
   WsSubscribePreviewEventsRpc,
+  WsRingerGetCapabilitiesRpc,
+  WsRingerListRunsRpc,
+  WsRingerLaunchRpc,
+  WsRingerGetStatusRpc,
+  WsRingerCancelRpc,
+  WsRingerRetryRpc,
+  WsRingerGateRpc,
+  WsRingerGetProofRpc,
+  WsRingerListArtifactsRpc,
+  WsRingerReadArtifactRpc,
+  WsSubscribeRingerRunsRpc,
   WsSubscribeDiscoveredLocalServersRpc,
   WsSubscribeServerConfigRpc,
   WsSubscribeServerLifecycleRpc,

@@ -15,6 +15,7 @@ import * as SynchronizedRef from "effect/SynchronizedRef";
 import serverPackageJson from "../../../server/package.json" with { type: "json" };
 
 import * as DesktopBackendManager from "./DesktopBackendManager.ts";
+import { PACKAGED_RINGER_RUNTIME_SHA256 } from "./RingerRuntimeDigest.generated.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopServerExposure from "./DesktopServerExposure.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
@@ -402,6 +403,12 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       env: {
         ...backendChildEnvPatch(),
         ELECTRON_RUN_AS_NODE: "1",
+        ...(environment.isPackaged
+          ? {
+              UNLOCK_RINGER_ROOT: environment.path.join(environment.resourcesPath, "ringer"),
+              UNLOCK_RINGER_EXPECTED_SHA256: PACKAGED_RINGER_RUNTIME_SHA256,
+            }
+          : {}),
       },
       // Primary wants process.env (PATH, dev-runner's T3CODE_HOME, etc.).
       extendEnv: true,

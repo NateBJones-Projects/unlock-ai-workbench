@@ -10,6 +10,8 @@
     "dev:web": "node scripts/dev-runner.ts dev:web",
     "dev:marketing": "vp run --filter @t3tools/marketing dev",
     "dev:desktop": "node scripts/dev-runner.ts dev:desktop",
+    "workbench": "node scripts/dev-runner.ts dev:desktop --home-dir .t3",
+    "workbench:web": "node scripts/dev-runner.ts dev --home-dir .t3",
     "start": "vp run --filter t3 start",
     "start:desktop": "vp run --filter @t3tools/desktop start",
     "start:marketing": "vp run --filter @t3tools/marketing preview",
@@ -42,7 +44,9 @@
     "release:smoke": "node scripts/release-smoke.ts",
     "connect:announce-ga": "node scripts/announce-connect-ga.ts",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist apps/*/dist-electron packages/*/dist .vite-plus apps/*/.vite-plus packages/*/.vite-plus",
-    "sync:repos": "node scripts/sync-reference-repos.ts"
+    "sync:repos": "node scripts/sync-reference-repos.ts",
+    "sync:ringer": "node scripts/sync-ringer-runtime.mjs",
+    "check:ringer": "node scripts/sync-ringer-runtime.mjs --check"
   },
   "devDependencies": {
     "@babel/plugin-transform-react-jsx": "7.28.6",

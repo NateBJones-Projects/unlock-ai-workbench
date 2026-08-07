@@ -75,7 +75,10 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   }
 }
 
-:root {
+:root,
+:root.dark,
+.dark {
+  color-scheme: dark;
   --app-scrollbar-width: 6px;
   --app-scrollbar-thumb: rgb(217 217 217);
   --app-scrollbar-thumb-hover: rgb(191 191 191);
@@ -1708,4 +1711,97 @@ label:has(> select#reasoning-effort) select {
   background-color: Highlight;
   opacity: 0.3;
   pointer-events: none;
+}
+
+/* Unlock AI Workbench brand layer. Keep this block isolated so upstream T3
+   theme changes remain easy to merge. */
+:root,
+:root.dark,
+.dark {
+  color-scheme: dark;
+  --unlock-cyan: #18c1e8;
+  --unlock-cream: #eae6df;
+  --unlock-ink: #161618;
+  --unlock-charcoal: #333333;
+  --radius: 0.4rem;
+  --font-sans:
+    Avenir, "Avenir Next", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --background: var(--unlock-ink);
+  --app-chrome-background: var(--unlock-ink);
+  --foreground: var(--unlock-cream);
+  --card: #1c1c1f;
+  --card-foreground: var(--unlock-cream);
+  --popover: #202024;
+  --popover-foreground: var(--unlock-cream);
+  --primary: var(--unlock-cyan);
+  --primary-foreground: #071318;
+  --secondary: #202024;
+  --secondary-foreground: var(--unlock-cream);
+  --muted: #202024;
+  --muted-foreground: #a8a5a0;
+  --accent: #29292d;
+  --accent-foreground: var(--unlock-cream);
+  --border: #35353a;
+  --input: #414147;
+  --ring: var(--unlock-cyan);
+  --info: var(--unlock-cyan);
+  --info-foreground: var(--unlock-cyan);
+  --success: #3ae88d;
+  --success-foreground: #3ae88d;
+  --warning: #ffdf43;
+  --warning-foreground: #ffdf43;
+  --destructive: #f2453d;
+  --destructive-foreground: #ff766f;
+  --sidebar: #121214;
+  --sidebar-foreground: var(--unlock-cream);
+  --sidebar-muted-foreground: #8f8c87;
+  --sidebar-control-surface: #202024;
+  --sidebar-row-hover: #202024;
+  --sidebar-row-active: #29292d;
+  --sidebar-row-selected: #29292d;
+  --sidebar-border: #2d2d31;
+  --sidebar-stage-fade: var(--sidebar);
+}
+
+[data-sidebar-version="v1"],
+[data-sidebar-version="v2"],
+.dark [data-sidebar-version="v1"],
+.dark [data-sidebar-version="v2"] {
+  --background: var(--unlock-ink);
+  --foreground: var(--unlock-cream);
+  --card: #1c1c1f;
+  --card-foreground: var(--unlock-cream);
+  --accent: #29292d;
+  --accent-foreground: var(--unlock-cream);
+  --muted: #202024;
+  --muted-foreground: #a8a5a0;
+  --border: #35353a;
+  --input: #414147;
+  --sidebar: #121214;
+  --sidebar-foreground: var(--unlock-cream);
+  --sidebar-muted-foreground: #8f8c87;
+  --sidebar-control-surface: #202024;
+  --sidebar-row-hover: #202024;
+  --sidebar-row-active: #29292d;
+  --sidebar-row-selected: #29292d;
+  --sidebar-border: #2d2d31;
+  --sidebar-stage-fade: var(--sidebar);
+  background-color: var(--sidebar);
+}
+
+.stage-blueprint {
+  display: none;
+}
+
+.ultrathink-frame,
+.ultrathink-frame::before,
+.ultrathink-chroma,
+.ultrathink-pill,
+.ultrathink-word {
+  animation: none;
+}
+
+.ultrathink-word {
+  color: var(--unlock-cyan);
+  background: none;
 }

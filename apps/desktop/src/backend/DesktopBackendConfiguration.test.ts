@@ -13,6 +13,7 @@ import { ChildProcessSpawner } from "effect/unstable/process";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopBackendConfiguration from "./DesktopBackendConfiguration.ts";
+import { PACKAGED_RINGER_RUNTIME_SHA256 } from "./RingerRuntimeDigest.generated.ts";
 import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopServerExposure from "./DesktopServerExposure.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
@@ -136,6 +137,8 @@ describe("DesktopBackendConfiguration", () => {
         assert.equal(first.cwd, environment.backendCwd);
         assert.equal(first.captureOutput, true);
         assert.equal(first.env.ELECTRON_RUN_AS_NODE, "1");
+        assert.equal(first.env.UNLOCK_RINGER_ROOT, "/missing/resources/ringer");
+        assert.equal(first.env.UNLOCK_RINGER_EXPECTED_SHA256, PACKAGED_RINGER_RUNTIME_SHA256);
         assert.isUndefined(first.env.T3CODE_PORT);
         assert.isUndefined(first.env.T3CODE_MODE);
         assert.isUndefined(first.env.T3CODE_DESKTOP_LAN_HOST);
@@ -151,6 +154,38 @@ describe("DesktopBackendConfiguration", () => {
         assert.equal(second.bootstrap.desktopBootstrapToken, first.bootstrap.desktopBootstrapToken);
       }),
     ),
+  );
+
+  it.effect("resolvePrimary leaves development Ringer discovery to the server", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-desktop-backend-config-test-",
+      });
+      const config = yield* Effect.gen(function* () {
+        const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
+        return yield* configuration.resolvePrimary;
+      }).pipe(
+        Effect.provide(
+          DesktopBackendConfiguration.layer.pipe(
+            Layer.provideMerge(serverExposureLayer),
+            Layer.provideMerge(DesktopAppSettings.layerTest()),
+            Layer.provideMerge(DesktopWslEnvironment.layerTest()),
+            Layer.provideMerge(
+              makeEnvironmentLayer(baseDir, {
+                appPath: "/repo",
+                devServerUrl: "http://127.0.0.1:5173",
+                isPackaged: false,
+                resourcesPath: "/development/resources",
+              }),
+            ),
+          ),
+        ),
+      );
+
+      assert.notProperty(config.env, "UNLOCK_RINGER_ROOT");
+      assert.notProperty(config.env, "UNLOCK_RINGER_EXPECTED_SHA256");
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
   it.effect("resolveWsl reuses the primary's bootstrap token", () =>

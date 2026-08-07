@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "product": "Unlock AI Workbench",
+  "runtime": "Ringer",
+  "repository": "https://github.com/NateBJones-Projects/ringer.git",
+  "revision": "a1a91b8b384a90dcca379e1cb9ab91405275ac46",
+  "selected_source_dirty": true,
+  "selected_source_status": [
+    "M ringer.py",
+    "?? NATE-JONES-MEDIA-INTEGRATION-AUTHORIZATION.md",
+    "?? docs/workbench-integration.md"
+  ],
+  "content_sha256": "9cba95cb51335284396b0c6427b24f2271b8494b77777404501fb68f42593ea5",
+  "files": [
+    {
+      "path": ".claude/skills/ringer/SKILL.md",
+      "sha256": "7dfe40a0e1a60c84d2be268184677f1bf38c3a1f33d4721dca626c92bf19861c",
+      "bytes": 22104,
+      "mode": "644"
+    },
+    {
+      "path": "LICENSE.md",
+      "sha256": "65489dec95ee5b13fb23217e575a61adaff71b2b9b384e9dbafa6988abde8265",
+      "bytes": 5870,
+      "mode": "644"
+    },
+    {
+      "path": "NATE-JONES-MEDIA-INTEGRATION-AUTHORIZATION.md",
+      "sha256": "ede38ae388887e5b7bc28d2841d604c5ab03d514026b323556afab57e5dd0d81",
+      "bytes": 561,
+      "mode": "644"
+    },
+    {
+      "path": "NATE_JONES_MEDIA_AUTHORIZATION.md",
+      "sha256": "0e973cba9d72176307136da56c2ac71fb64b0cf63c328f5794a8b126562d4e34",
+      "bytes": 1090,
+      "mode": "644"
+    },
+    {
+      "path": "README.md",
+      "sha256": "aa555ad2fc6918fb4fe4a4264ee656ded44a59ebf7ebf3f9b24a26f4320ac39d",
+      "bytes": 29200,
+      "mode": "644"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "sha256": "c2e49fbf933381e0210b25fe9c022c28e4b61cd71611b71ca571cedc8b7d5ee9",
+      "bytes": 1213,
+      "mode": "644"
+    },
+    {
+      "path": "config.sample.toml",
+      "sha256": "cafeba7c19feebb290b183335ffe19d99d8d092e6069e1f92e7d0d74cc0eea00",
+      "bytes": 7695,
+      "mode": "644"
+    },
+    {
+      "path": "dashboard/dashboard.html",
+      "sha256": "09b05c1046121f71c5c0439c4fcafb2a509e23480f10f0be82e87a1ded89afb6",
+      "bytes": 98434,
+      "mode": "644"
+    },
+    {
+      "path": "dashboard/ringside.html",
+      "sha256": "cfad71ae551acda8d09f3e88ab51b198b4b732fddf1d1b93a187da43dc876b2d",
+      "bytes": 64706,
+      "mode": "644"
+    },
+    {
+      "path": "docs/MODEL-NOTES.md",
+      "sha256": "ebaa367a97d6eab801f802ade570b255d3d138bd43540adc0f9ed5678ff3c954",
+      "bytes": 24843,
+      "mode": "644"
+    },
+    {
+      "path": "docs/workbench-integration.md",
+      "sha256": "1fa5ac40f8a1133987b936edd79ccd880e637478b62e016293d3f83e83be6100",
+      "bytes": 3500,
+      "mode": "644"
+    },
+    {
+      "path": "engines/mock_worker.py",
+      "sha256": "f74d86392cf740db670fcafa370313205c9e8453d4fdfc68c6dae4594bdc5d00",
+      "bytes": 2788,
+      "mode": "755"
+    },
+    {
+      "path": "engines/opencode-sandboxed.sh",
+      "sha256": "5b5b77e884ac109412a1ffb398c58cc6fbdf90dcca947c120288c3615c862cbb",
+      "bytes": 3340,
+      "mode": "755"
+    },
+    {
+      "path": "hooks/ringer_nudge.py",
+      "sha256": "a363ea497f94437f5ebb7e32a449ebe725a3e4e4da898f30791ae0f3a69afedd",
+      "bytes": 7014,
+      "mode": "644"
+    },
+    {
+      "path": "registry/model-identity.toml",
+      "sha256": "13dca7adbedeed39a50890d1f0828e82ee4a283475419b86578501c87a769524",
+      "bytes": 3669,
+      "mode": "644"
+    },
+    {
+      "path": "ringer.py",
+      "sha256": "c384c9a40b97d3bd60fab0c7a217a41535b67209fea1156d2d3cff6e9033f3bf",
+      "bytes": 435420,
+      "mode": "755"
+    }
+  ]
+}
