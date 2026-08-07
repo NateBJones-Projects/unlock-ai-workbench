@@ -14,7 +14,7 @@ Home answers one question: are you ready to run something? The three tiles acros
 
 Below the tiles, **Start with a result** lists the three runnable workflows — **Talk to Published**, **Release Day**, and **The Research Engine** — each with its step count, verification style, and a human-gate marker. Press **Start** on any of them and the Workbench prepares a prompt for your review (see [Launching a workflow](#launching-a-workflow) below). The line above the cards is a promise the whole product keeps: every v1 workflow ends at a reviewable local artifact, and publishing, sending, and account changes remain human decisions.
 
-When an update notice appears in the corner, **Update** installs it now; **Settings** lets you review provider settings first. Dismiss it with the × and it will not nag you mid-task.
+Provider updates never interrupt you here — when a newer Claude Code or Codex is available, you will find the update waiting under **Settings → Providers**, on your schedule.
 
 ## Adding your workspace folder
 
