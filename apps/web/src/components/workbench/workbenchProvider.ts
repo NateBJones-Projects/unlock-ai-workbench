@@ -30,8 +30,30 @@ export function resolveWorkbenchProvider(
   );
 }
 
+/**
+ * Unlock markers carried on a detected skill: `unlockPack` names the catalog
+ * entry that produced it, `personalizedAt` the date the setup interview was
+ * written into it.
+ */
+export type WorkbenchSkillMetadata = {
+  readonly unlockPack?: string;
+  readonly personalizedAt?: string;
+};
+
+export function detectedWorkbenchSkills(
+  provider: ServerProvider | null,
+): ReadonlyMap<string, WorkbenchSkillMetadata> {
+  const skills = new Map<string, WorkbenchSkillMetadata>();
+  for (const skill of provider?.skills ?? []) {
+    if (!skill.enabled) continue;
+    skills.set(skill.name, {
+      ...(skill.unlockPack ? { unlockPack: skill.unlockPack } : {}),
+      ...(skill.personalizedAt ? { personalizedAt: skill.personalizedAt } : {}),
+    });
+  }
+  return skills;
+}
+
 export function detectedWorkbenchSkillNames(provider: ServerProvider | null): ReadonlySet<string> {
-  return new Set(
-    (provider?.skills ?? []).filter((skill) => skill.enabled).map((skill) => skill.name),
-  );
+  return new Set(detectedWorkbenchSkills(provider).keys());
 }

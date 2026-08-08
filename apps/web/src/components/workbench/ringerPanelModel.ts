@@ -11,6 +11,18 @@ export function ringerRunIsLive(run: RingerRunProjection): boolean {
   return run.status === "queued" || run.status === "running" || run.status === "canceling";
 }
 
+export function ringerRunIsTerminal(run: RingerRunProjection): boolean {
+  return !ringerRunIsLive(run);
+}
+
+const TRAILING_UUID_PATTERN =
+  /[\s._-]*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function ringerRunDisplayName(name: string): string {
+  const stripped = name.replace(TRAILING_UUID_PATTERN, "").trim();
+  return stripped.length > 0 ? stripped : name;
+}
+
 export function selectCancelableRingerRun(
   runs: ReadonlyArray<RingerRunProjection>,
   threadId: ThreadId,
@@ -18,6 +30,18 @@ export function selectCancelableRingerRun(
 ): RingerRunProjection | null {
   const run = runs.find((candidate) => candidate.runId === runId);
   if (!run || run.threadId !== threadId || !ringerRunIsLive(run) || !run.operations.cancel) {
+    return null;
+  }
+  return run;
+}
+
+export function selectDismissableRingerRun(
+  runs: ReadonlyArray<RingerRunProjection>,
+  threadId: ThreadId,
+  runId: RingerRunId,
+): RingerRunProjection | null {
+  const run = runs.find((candidate) => candidate.runId === runId);
+  if (!run || run.threadId !== threadId || !ringerRunIsTerminal(run)) {
     return null;
   }
   return run;
@@ -68,23 +92,43 @@ export function ringerArtifactSupportsUtf8Preview(artifact: RingerArtifactDescri
   );
 }
 
+const sortRingerRuns = (runs: Array<RingerRunProjection>): ReadonlyArray<RingerRunProjection> =>
+  runs.sort(
+    (a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt) || b.runId.localeCompare(a.runId),
+  );
+
 export function applyRingerThreadEvent(
   current: ReadonlyArray<RingerRunProjection>,
   event: RingerThreadEvent,
 ): ReadonlyArray<RingerRunProjection> {
   const next =
-    event.type === "snapshot"
-      ? [...event.runs]
-      : (() => {
-          const byId = new Map(current.map((run) => [run.runId, run]));
-          for (const run of event.runs) {
-            const existing = byId.get(run.runId);
-            if (!existing || run.revision >= existing.revision) byId.set(run.runId, run);
-          }
-          return [...byId.values()];
-        })();
-  return next.sort(
-    (a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt) || b.runId.localeCompare(a.runId),
+    event.type === "removed"
+      ? current.filter((run) => run.runId !== event.runId)
+      : event.type === "snapshot"
+        ? [...event.runs]
+        : (() => {
+            const byId = new Map(current.map((run) => [run.runId, run]));
+            for (const run of event.runs) {
+              const existing = byId.get(run.runId);
+              if (!existing || run.revision >= existing.revision) byId.set(run.runId, run);
+            }
+            return [...byId.values()];
+          })();
+  return sortRingerRuns(next);
+}
+
+// For authoritative complete snapshots (the projected event stream): keeps a
+// newer local revision per run, and drops runs the snapshot no longer carries.
+export function syncRingerThreadRuns(
+  current: ReadonlyArray<RingerRunProjection>,
+  runs: ReadonlyArray<RingerRunProjection>,
+): ReadonlyArray<RingerRunProjection> {
+  const byId = new Map(current.map((run) => [run.runId, run]));
+  return sortRingerRuns(
+    runs.map((run) => {
+      const existing = byId.get(run.runId);
+      return existing && existing.revision > run.revision ? existing : run;
+    }),
   );
 }
 

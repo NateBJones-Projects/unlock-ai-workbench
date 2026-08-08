@@ -6,6 +6,7 @@ import {
   RingerMemberId,
   RingerOperationUnsupportedError,
   RingerRunId,
+  RingerRunNotDismissableError,
   RingerRunNotFoundError,
   RingerUnavailableError,
   ThreadId,
@@ -25,6 +26,7 @@ import {
   type RingerRunTargetInput,
   type RingerTemplateDescriptor,
   type RingerThreadEvent,
+  type RingerThreadRunsEvent,
   type RingerThreadInput,
   type RingerThreadRunList,
   type RingerError,
@@ -72,13 +74,25 @@ const OPERATIONS = {
   gate: false,
 };
 
-const TERMINAL_STATUSES = new Set<RingerRunProjection["status"]>([
-  "canceled",
-  "succeeded",
-  "failed",
-  "lost",
-]);
+const TERMINAL_STATUS_VALUES = ["canceled", "succeeded", "failed", "lost"] as const;
+const TERMINAL_STATUSES = new Set<RingerRunProjection["status"]>(TERMINAL_STATUS_VALUES);
 const LOST_AFTER_MS = 30_000;
+const LOST_RECHECK_EVERY_TICKS = 10;
+
+const PersistedTerminalSnapshot = Schema.Struct({
+  status: Schema.Literals(TERMINAL_STATUS_VALUES),
+  name: Schema.String,
+  finishedAt: Schema.String,
+  totals: Schema.Struct({
+    total: Schema.Number,
+    queued: Schema.Number,
+    active: Schema.Number,
+    passed: Schema.Number,
+    failed: Schema.Number,
+    tokens: Schema.Number,
+  }),
+});
+type PersistedTerminalSnapshot = typeof PersistedTerminalSnapshot.Type;
 
 const PersistedAttachment = Schema.Struct({
   publicRunId: Schema.String,
@@ -90,6 +104,7 @@ const PersistedAttachment = Schema.Struct({
   createdAt: Schema.String,
   createdAtMs: Schema.Number,
   cancelRequestedAt: Schema.optional(Schema.String),
+  terminal: Schema.optional(PersistedTerminalSnapshot),
 });
 type PersistedAttachment = typeof PersistedAttachment.Type;
 
@@ -122,6 +137,7 @@ export class RingerRunService extends Context.Service<
     readonly cancel: (
       input: RingerRunTargetInput,
     ) => Effect.Effect<RingerRunProjection, RingerError>;
+    readonly dismiss: (input: RingerRunTargetInput) => Effect.Effect<void, RingerError>;
     readonly retry: (input: RingerRetryInput) => Effect.Effect<RingerRunProjection, RingerError>;
     readonly gate: (input: RingerGateInput) => Effect.Effect<RingerRunProjection, RingerError>;
     readonly proof: (input: RingerProofInput) => Effect.Effect<RingerProofDetail, RingerError>;
@@ -279,14 +295,43 @@ const queuedProjection = (attachment: PersistedAttachment): RingerRunProjection 
   startedAt: attachment.createdAt,
   updatedAt: attachment.cancelRequestedAt ?? attachment.createdAt,
   finishedAt: null,
-  operations: {
-    ...OPERATIONS,
-    cancel: CANCEL_SUPPORTED && attachment.cancelRequestedAt === undefined,
-  },
+  operations: { ...OPERATIONS },
   totals: { total: 1, queued: 1, active: 0, passed: 0, failed: 0, tokens: 0 },
   members: [],
   artifacts: [],
 });
+
+const terminalProjection = (
+  attachment: PersistedAttachment,
+  terminal: PersistedTerminalSnapshot,
+): RingerRunProjection => ({
+  ...queuedProjection(attachment),
+  name: safeName(terminal.name, TEMPLATE.name),
+  status: terminal.status,
+  updatedAt: terminal.finishedAt,
+  finishedAt: terminal.finishedAt,
+  operations: { ...OPERATIONS, cancel: false },
+  totals: {
+    total: Math.max(0, Math.round(terminal.totals.total)),
+    queued: Math.max(0, Math.round(terminal.totals.queued)),
+    active: Math.max(0, Math.round(terminal.totals.active)),
+    passed: Math.max(0, Math.round(terminal.totals.passed)),
+    failed: Math.max(0, Math.round(terminal.totals.failed)),
+    tokens: Math.max(0, Math.round(terminal.totals.tokens)),
+  },
+});
+
+const terminalSnapshotFor = (
+  projection: RingerRunProjection,
+): PersistedTerminalSnapshot | undefined =>
+  TERMINAL_STATUSES.has(projection.status)
+    ? {
+        status: projection.status as PersistedTerminalSnapshot["status"],
+        name: projection.name,
+        finishedAt: projection.finishedAt ?? projection.updatedAt,
+        totals: projection.totals,
+      }
+    : undefined;
 
 export const projectRingerState = (input: {
   readonly attachment: PersistedAttachment;
@@ -350,7 +395,7 @@ export const projectRingerState = (input: {
     finishedAt: finished ? updatedAt : null,
     operations: {
       ...OPERATIONS,
-      cancel: CANCEL_SUPPORTED && status === "running",
+      cancel: CANCEL_SUPPORTED && (status === "running" || status === "canceling"),
     },
     totals: {
       total: members.length,
@@ -401,7 +446,12 @@ export const make = Effect.gen(function* () {
     matchingAttachments.map((attachment) => [attachment.publicRunId, attachment]),
   );
   const initialProjections = new Map(
-    matchingAttachments.map((attachment) => [attachment.publicRunId, queuedProjection(attachment)]),
+    matchingAttachments.map((attachment) => [
+      attachment.publicRunId,
+      attachment.terminal
+        ? terminalProjection(attachment, attachment.terminal)
+        : queuedProjection(attachment),
+    ]),
   );
   const stateRef = yield* SynchronizedRef.make<ServiceState>({
     ...(persisted.hudPort === undefined ? {} : { hudPort: persisted.hudPort }),
@@ -438,6 +488,13 @@ export const make = Effect.gen(function* () {
       return persist(next).pipe(Effect.as([hudPort, next] as const));
     });
 
+  const setPendingHudIdentity = (hudNonce: string, hudRuntimeDigest: string) =>
+    SynchronizedRef.modifyEffect(stateRef, (state) => {
+      const { hudPort: _hudPort, ...rest } = state;
+      const next = { ...rest, hudNonce, hudRuntimeDigest };
+      return persist(next).pipe(Effect.as([hudNonce, next] as const));
+    });
+
   const ensureManagedHud = hudMutex.withPermits(1)(
     Effect.gen(function* () {
       const state = yield* SynchronizedRef.get(stateRef);
@@ -449,14 +506,18 @@ export const make = Effect.gen(function* () {
         });
       }
       const runtimeMatches = state.hudRuntimeDigest === probe.runtimeDigest;
+      const persistedNonce = runtimeMatches ? state.hudNonce : undefined;
       const hudNonce =
-        (runtimeMatches ? state.hudNonce : undefined) ??
+        persistedNonce ??
         (yield* crypto.randomBytes(32).pipe(
           Effect.map((bytes) => Buffer.from(bytes).toString("base64url")),
           Effect.mapError(
             () => new RingerExecutionError({ operation: "launch", stage: "prepare" }),
           ),
         ));
+      if (persistedNonce === undefined) {
+        yield* setPendingHudIdentity(hudNonce, probe.runtimeDigest);
+      }
       const hudPort = yield* runtime.ensureHud({
         ...(runtimeMatches && state.hudPort !== undefined ? { preferredPort: state.hudPort } : {}),
         instanceNonce: hudNonce,
@@ -499,6 +560,11 @@ export const make = Effect.gen(function* () {
 
   const commitProjection = (projection: RingerRunProjection) =>
     SynchronizedRef.modifyEffect(stateRef, (state) => {
+      if (!state.attachments.has(projection.runId)) {
+        // The run was dismissed while this refresh was in flight; committing
+        // would resurrect a projection with no backing attachment.
+        return Effect.succeed([projection, state] as const);
+      }
       const previous = state.projections.get(projection.runId);
       if (previous && projectionMaterial(previous) === projectionMaterial(projection)) {
         return Effect.succeed([previous, state] as const);
@@ -509,21 +575,38 @@ export const make = Effect.gen(function* () {
       };
       const projections = new Map(state.projections);
       projections.set(projection.runId, nextProjection);
-      const next = { ...state, projections };
+      let next = { ...state, projections };
+      const attachment = state.attachments.get(projection.runId);
+      const terminal = terminalSnapshotFor(nextProjection);
+      const terminalChanged =
+        attachment !== undefined &&
+        JSON.stringify(attachment.terminal) !== JSON.stringify(terminal);
+      if (attachment && terminalChanged) {
+        const attachments = new Map(state.attachments);
+        const { terminal: _terminal, ...rest } = attachment;
+        attachments.set(attachment.publicRunId, terminal ? { ...rest, terminal } : rest);
+        next = { ...next, attachments };
+      }
       const threadRuns = Array.from(projections.values())
         .filter((candidate) => candidate.threadId === nextProjection.threadId)
         .sort((left, right) => right.startedAt.localeCompare(left.startedAt));
-      return PubSub.publish(events, {
-        type: "snapshot",
-        threadId: nextProjection.threadId,
-        runs: threadRuns,
-      }).pipe(Effect.as([nextProjection, next] as const));
+      return (terminalChanged ? persist(next) : Effect.void).pipe(
+        Effect.andThen(
+          PubSub.publish(events, {
+            type: "snapshot",
+            threadId: nextProjection.threadId,
+            runs: threadRuns,
+          }),
+        ),
+        Effect.as([nextProjection, next] as const),
+      );
     });
 
   const markLost = Effect.fn("RingerRunService.markLost")(function* (
     attachment: PersistedAttachment,
   ) {
     const previous = (yield* SynchronizedRef.get(stateRef)).projections.get(attachment.publicRunId);
+    if (previous?.status === "lost") return previous;
     const timestamp = yield* nowIso;
     return yield* commitProjection({
       ...(previous ?? queuedProjection(attachment)),
@@ -538,6 +621,12 @@ export const make = Effect.gen(function* () {
   const refreshAttachment = Effect.fn("RingerRunService.refreshAttachment")(function* (
     currentAttachment: PersistedAttachment,
   ) {
+    const settled = (yield* SynchronizedRef.get(stateRef)).projections.get(
+      currentAttachment.publicRunId,
+    );
+    if (settled && TERMINAL_STATUSES.has(settled.status) && settled.status !== "lost") {
+      return settled;
+    }
     let attachment = currentAttachment;
     if (!attachment.backendRunId) {
       const backendRunId = yield* runtime.discoverBackendRunId({
@@ -709,18 +798,76 @@ export const make = Effect.gen(function* () {
         ...projection,
         status: "canceling",
         updatedAt: cancelRequestedAt,
-        operations: { ...projection.operations, cancel: false },
+        operations: { ...projection.operations, cancel: CANCEL_SUPPORTED },
       });
-      const hudPort = yield* ensureManagedHud;
-      yield* runtime.cancel({
-        environmentId,
-        threadId: input.threadId,
-        launchId: input.runId,
-        backendRunId,
-        controlToken: attachment.controlToken,
-        hudPort,
-      });
+      yield* Effect.gen(function* () {
+        const hudPort = yield* ensureManagedHud;
+        yield* runtime.cancel({
+          environmentId,
+          threadId: input.threadId,
+          launchId: input.runId,
+          backendRunId,
+          controlToken: attachment.controlToken,
+          hudPort,
+        });
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.gen(function* () {
+            const current = (yield* SynchronizedRef.get(stateRef)).attachments.get(input.runId);
+            if (current?.cancelRequestedAt === cancelRequestedAt) {
+              const { cancelRequestedAt: _cancelRequestedAt, ...rest } = current;
+              yield* commitAttachment(rest);
+              yield* refreshAttachment(rest).pipe(Effect.ignore);
+            }
+          }).pipe(Effect.andThen(Effect.fail(error))),
+        ),
+      );
       return projection;
+    },
+  );
+
+  const dismiss: RingerRunService["Service"]["dismiss"] = Effect.fn("RingerRunService.dismiss")(
+    function* (input) {
+      yield* SynchronizedRef.modifyEffect(
+        stateRef,
+        (state): Effect.Effect<readonly [undefined, ServiceState], RingerError> => {
+          const attachment = state.attachments.get(input.runId);
+          if (attachment?.threadId !== input.threadId) {
+            return Effect.fail(
+              new RingerRunNotFoundError({
+                operation: "dismiss",
+                threadId: input.threadId,
+                runId: input.runId,
+              }),
+            );
+          }
+          const status = state.projections.get(input.runId)?.status ?? "queued";
+          if (!TERMINAL_STATUSES.has(status)) {
+            return Effect.fail(
+              new RingerRunNotDismissableError({
+                operation: "dismiss",
+                runId: input.runId,
+                status,
+              }),
+            );
+          }
+          const attachments = new Map(state.attachments);
+          attachments.delete(input.runId);
+          const projections = new Map(state.projections);
+          projections.delete(input.runId);
+          const next = { ...state, attachments, projections };
+          return persist(next).pipe(
+            Effect.andThen(
+              PubSub.publish(events, {
+                type: "removed",
+                threadId: input.threadId,
+                runId: input.runId,
+              }),
+            ),
+            Effect.as([undefined, next] as const),
+          );
+        },
+      );
     },
   );
 
@@ -875,7 +1022,7 @@ export const make = Effect.gen(function* () {
           events,
           list(input).pipe(
             Effect.map(
-              (snapshot): RingerThreadEvent => ({
+              (snapshot): RingerThreadRunsEvent => ({
                 type: "snapshot",
                 threadId: snapshot.threadId,
                 runs: snapshot.runs,
@@ -884,16 +1031,34 @@ export const make = Effect.gen(function* () {
           ),
         );
         const revisions = yield* Ref.make(
-          new Map(subscribed.latest.runs.map((run) => [run.runId, run.revision])),
+          new Map<RingerRunId, number>(
+            subscribed.latest.type === "removed"
+              ? []
+              : subscribed.latest.runs.map((run) => [run.runId, run.revision] as const),
+          ),
         );
         const changes = subscribed.changes.pipe(
           Stream.filter((event) => event.threadId === input.threadId),
           Stream.mapEffect((event) =>
-            Ref.modify(revisions, (known) => {
-              const isNewer = event.runs.some((run) => (known.get(run.runId) ?? -1) < run.revision);
-              if (!isNewer) return [undefined, known] as const;
-              return [event, new Map(event.runs.map((run) => [run.runId, run.revision]))] as const;
-            }),
+            Ref.modify(
+              revisions,
+              (known): readonly [RingerThreadEvent | undefined, Map<RingerRunId, number>] => {
+                if (event.type === "removed") {
+                  if (!known.has(event.runId)) return [undefined, known] as const;
+                  const remaining = new Map(known);
+                  remaining.delete(event.runId);
+                  return [event, remaining] as const;
+                }
+                const isNewer = event.runs.some(
+                  (run) => (known.get(run.runId) ?? -1) < run.revision,
+                );
+                if (!isNewer) return [undefined, known] as const;
+                return [
+                  event,
+                  new Map(event.runs.map((run) => [run.runId, run.revision] as const)),
+                ] as const;
+              },
+            ),
           ),
           Stream.filter((event): event is RingerThreadEvent => event !== undefined),
         );
@@ -901,13 +1066,19 @@ export const make = Effect.gen(function* () {
       }),
     );
 
-  const refreshAll = Effect.gen(function* () {
+  const refreshAll = Effect.fn("RingerRunService.refreshAll")(function* (recheckLost: boolean) {
     const snapshot = yield* SynchronizedRef.get(stateRef);
     yield* Effect.forEach(
       snapshot.attachments.values(),
       (attachment) => {
         const current = snapshot.projections.get(attachment.publicRunId);
-        if (current && TERMINAL_STATUSES.has(current.status)) return Effect.void;
+        if (
+          current &&
+          TERMINAL_STATUSES.has(current.status) &&
+          !(recheckLost && current.status === "lost")
+        ) {
+          return Effect.void;
+        }
         return refreshAttachment(attachment).pipe(
           Effect.catch((error) =>
             Effect.logWarning("Ringer run refresh failed", {
@@ -921,8 +1092,17 @@ export const make = Effect.gen(function* () {
       { concurrency: 4, discard: true },
     );
   });
+  const refreshTick = yield* Ref.make(0);
   yield* Effect.forkScoped(
-    Effect.forever(refreshAll.pipe(Effect.andThen(Effect.sleep("500 millis")))),
+    Effect.forever(
+      Ref.modify(
+        refreshTick,
+        (tick) => [tick, (tick + 1) % LOST_RECHECK_EVERY_TICKS] as const,
+      ).pipe(
+        Effect.flatMap((tick) => refreshAll(tick === LOST_RECHECK_EVERY_TICKS - 1)),
+        Effect.andThen(Effect.sleep("500 millis")),
+      ),
+    ),
   );
 
   return RingerRunService.of({
@@ -931,6 +1111,7 @@ export const make = Effect.gen(function* () {
     launch,
     status,
     cancel,
+    dismiss,
     retry,
     gate,
     proof,

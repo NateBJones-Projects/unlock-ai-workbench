@@ -37,16 +37,32 @@ interface WorkbenchLaunchStoreState {
 
 const WORKBENCH_LAUNCH_STORAGE_KEY = "unlock-ai:workbench-launches:v1";
 
+// Provenance persists per thread in localStorage; prune the oldest entries on
+// write so long-lived installs do not accumulate unbounded state.
+const MAX_PERSISTED_LAUNCHES = 50;
+
+function pruneOldestLaunches(
+  byThreadKey: Readonly<Record<string, WorkbenchLaunchProvenance>>,
+): Record<string, WorkbenchLaunchProvenance> {
+  const entries = Object.entries(byThreadKey);
+  if (entries.length <= MAX_PERSISTED_LAUNCHES) return { ...byThreadKey };
+  return Object.fromEntries(
+    entries
+      .sort(([, a], [, b]) => b.preparedAt.localeCompare(a.preparedAt))
+      .slice(0, MAX_PERSISTED_LAUNCHES),
+  );
+}
+
 export const useWorkbenchLaunchStore = create<WorkbenchLaunchStoreState>()(
   persist(
     (set) => ({
       byThreadKey: {},
       record: (ref, provenance) =>
         set((state) => ({
-          byThreadKey: {
+          byThreadKey: pruneOldestLaunches({
             ...state.byThreadKey,
             [scopedThreadKey(ref)]: provenance,
-          },
+          }),
         })),
       removeThread: (ref) =>
         set((state) => {

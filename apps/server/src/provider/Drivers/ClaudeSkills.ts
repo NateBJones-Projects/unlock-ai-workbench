@@ -24,10 +24,27 @@ type ClaudeSkillScope = "user" | "project";
 
 const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 
+/**
+ * Optional Unlock AI frontmatter markers an installed SKILL.md may carry:
+ * `x-unlock-pack: <catalog-id>@<version>` records which catalog entry produced
+ * the skill, and `x-unlock-personalized: <YYYY-MM-DD>` records that the setup
+ * interview was completed and its answers written into the skill.
+ */
+type UnlockSkillMarkers = Pick<ServerProviderSkill, "unlockPack" | "personalizedAt">;
+
 type SkillFrontmatter =
   | { readonly kind: "missing" }
   | { readonly kind: "malformed" }
-  | { readonly kind: "parsed"; readonly name?: string; readonly description?: string };
+  | ({
+      readonly kind: "parsed";
+      readonly name?: string;
+      readonly description?: string;
+    } & UnlockSkillMarkers);
+
+function frontmatterString(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  return typeof value === "string" ? value.trim() : "";
+}
 
 function parseSkillFrontmatter(contents: string): SkillFrontmatter {
   const match = FRONTMATTER_PATTERN.exec(contents);
@@ -46,14 +63,47 @@ function parseSkillFrontmatter(contents: string): SkillFrontmatter {
   }
 
   const record = parsed as Record<string, unknown>;
-  const name = typeof record.name === "string" ? record.name.trim() : "";
-  const description = typeof record.description === "string" ? record.description.trim() : "";
+  const name = frontmatterString(record, "name");
+  const description = frontmatterString(record, "description");
+  const unlockPack = frontmatterString(record, "x-unlock-pack");
+  const personalizedAt = frontmatterString(record, "x-unlock-personalized");
   return {
     kind: "parsed",
     ...(name ? { name } : {}),
     ...(description ? { description } : {}),
+    ...(unlockPack ? { unlockPack } : {}),
+    ...(personalizedAt ? { personalizedAt } : {}),
   };
 }
+
+/**
+ * Read the Unlock markers from an installed skill's SKILL.md. `skillPath` may
+ * point at the SKILL.md itself or at the skill directory — the Codex
+ * app-server reports skill paths without exposing frontmatter, so the Codex
+ * driver reads the same file Claude discovery parses. Best-effort: unreadable
+ * or unmarked skills yield no markers.
+ */
+export const readUnlockSkillMarkers = Effect.fn("readUnlockSkillMarkers")(function* (
+  skillPath: string,
+): Effect.fn.Return<UnlockSkillMarkers, never, FileSystem.FileSystem | Path.Path> {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const markdownPath = skillPath.endsWith(".md") ? skillPath : path.join(skillPath, "SKILL.md");
+  const contents = yield* fileSystem
+    .readFileString(markdownPath)
+    .pipe(Effect.orElseSucceed(() => undefined));
+  if (contents === undefined) {
+    return {};
+  }
+  const frontmatter = parseSkillFrontmatter(contents);
+  if (frontmatter.kind !== "parsed") {
+    return {};
+  }
+  return {
+    ...(frontmatter.unlockPack ? { unlockPack: frontmatter.unlockPack } : {}),
+    ...(frontmatter.personalizedAt ? { personalizedAt: frontmatter.personalizedAt } : {}),
+  };
+});
 
 /**
  * Resolve the Claude config directory the CLI would use, matching the
@@ -139,6 +189,12 @@ export const discoverClaudeSkills = Effect.fn("discoverClaudeSkills")(function* 
         scope: root.scope,
         ...(frontmatter.kind === "parsed" && frontmatter.description
           ? { description: frontmatter.description }
+          : {}),
+        ...(frontmatter.kind === "parsed" && frontmatter.unlockPack
+          ? { unlockPack: frontmatter.unlockPack }
+          : {}),
+        ...(frontmatter.kind === "parsed" && frontmatter.personalizedAt
+          ? { personalizedAt: frontmatter.personalizedAt }
           : {}),
       });
     }

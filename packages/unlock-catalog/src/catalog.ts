@@ -4,6 +4,7 @@ import type {
   CatalogIssue,
   PermissionPolicy,
   ProviderCompatibility,
+  SkillBlueprint,
   UnlockCatalog,
   VerificationContract,
 } from "./types.ts";
@@ -169,6 +170,21 @@ export function validateCatalog(catalog: UnlockCatalog): readonly CatalogIssue[]
     issues.push(...validateVerification(path, workflow.verification));
   });
 
+  return issues;
+}
+
+export function validateSkillBlueprints(
+  blueprints: readonly SkillBlueprint[],
+): readonly CatalogIssue[] {
+  const issues: CatalogIssue[] = [];
+  blueprints.forEach((blueprint, index) => {
+    if (blueprint.installName !== undefined && !SLUG_PATTERN.test(blueprint.installName)) {
+      issues.push({
+        path: `blueprints.${index}.installName`,
+        message: "Blueprint install names must be lowercase hyphen slugs.",
+      });
+    }
+  });
   return issues;
 }
 

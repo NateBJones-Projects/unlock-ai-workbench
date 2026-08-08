@@ -45,6 +45,7 @@ export const RingerOperation = Schema.Literals([
   "launch",
   "status",
   "cancel",
+  "dismiss",
   "retry",
   "gate",
   "proof",
@@ -209,6 +210,9 @@ export const RingerLaunchInput = Schema.Struct({
 });
 export type RingerLaunchInput = typeof RingerLaunchInput.Type;
 
+export const RingerDismissInput = RingerRunTargetInput;
+export type RingerDismissInput = typeof RingerDismissInput.Type;
+
 export const RingerRetryInput = Schema.Struct({
   ...RingerRunTargetInput.fields,
   memberId: RingerMemberId,
@@ -261,11 +265,21 @@ export const RingerThreadRunList = Schema.Struct({
 });
 export type RingerThreadRunList = typeof RingerThreadRunList.Type;
 
-export const RingerThreadEvent = Schema.Struct({
+export const RingerThreadRunsEvent = Schema.Struct({
   type: Schema.Literals(["snapshot", "upsert"]),
   threadId: ThreadId,
   runs: Schema.Array(RingerRunProjection),
 });
+export type RingerThreadRunsEvent = typeof RingerThreadRunsEvent.Type;
+
+export const RingerRunRemovedEvent = Schema.Struct({
+  type: Schema.Literal("removed"),
+  threadId: ThreadId,
+  runId: RingerRunId,
+});
+export type RingerRunRemovedEvent = typeof RingerRunRemovedEvent.Type;
+
+export const RingerThreadEvent = Schema.Union([RingerThreadRunsEvent, RingerRunRemovedEvent]);
 export type RingerThreadEvent = typeof RingerThreadEvent.Type;
 
 export class RingerUnavailableError extends Schema.TaggedErrorClass<RingerUnavailableError>()(
@@ -308,6 +322,19 @@ export class RingerRunNotFoundError extends Schema.TaggedErrorClass<RingerRunNot
 ) {
   override get message(): string {
     return `Ringer run '${this.runId}' was not found in this thread.`;
+  }
+}
+
+export class RingerRunNotDismissableError extends Schema.TaggedErrorClass<RingerRunNotDismissableError>()(
+  "RingerRunNotDismissableError",
+  {
+    operation: Schema.Literal("dismiss"),
+    runId: RingerRunId,
+    status: RingerRunStatus,
+  },
+) {
+  override get message(): string {
+    return `Ringer run '${this.runId}' is still ${this.status} and can only be dismissed once it finishes.`;
   }
 }
 
@@ -361,6 +388,7 @@ export const RingerError = Schema.Union([
   RingerUnavailableError,
   RingerTemplateNotAllowedError,
   RingerRunNotFoundError,
+  RingerRunNotDismissableError,
   RingerOperationUnsupportedError,
   RingerExecutionError,
   RingerMcpCapabilityUnavailableError,

@@ -1,0 +1,164 @@
+name: Upstream Watch
+
+on:
+  schedule:
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+
+env:
+  UPSTREAM_REPO: pingdotgg/t3code
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: upstream-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout with full history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git fetch upstream --prune
+
+      - name: Resolve upstream head
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          UPSTREAM_DEFAULT="$(gh repo view "$UPSTREAM_REPO" --json defaultBranchRef -q .defaultBranchRef.name)"
+          UPSTREAM_SHA="$(git rev-parse "upstream/${UPSTREAM_DEFAULT}")"
+          {
+            echo "upstream_default=${UPSTREAM_DEFAULT}"
+            echo "upstream_sha=${UPSTREAM_SHA}"
+            echo "upstream_short=${UPSTREAM_SHA:0:8}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Load or initialize cursor issue
+        id: cursor
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM_SHA: ${{ steps.resolve.outputs.upstream_sha }}
+        run: |
+          gh label create upstream-watch-cursor --color 0E8A16 \
+            --description "Carries the last-seen upstream sha for the watch workflow" 2>/dev/null || true
+
+          {
+            echo "last-seen-upstream-sha: ${UPSTREAM_SHA}"
+            echo
+            echo "This issue stores state for \`.github/workflows/upstream-watch.yml\` so the workflow never commits to the repo. The body is machine-edited on every run; keep it open and do not edit by hand."
+          } > /tmp/cursor-body.md
+
+          NUMBER="$(gh issue list --state open --label upstream-watch-cursor --json number -q '.[0].number')"
+          if [ -z "$NUMBER" ]; then
+            NUMBER="$(gh issue create \
+              --title "Upstream watch cursor (do not close)" \
+              --label upstream-watch-cursor \
+              --body-file /tmp/cursor-body.md \
+              | grep -Eo '[0-9]+$')"
+            echo "First run: created cursor issue #${NUMBER} at ${UPSTREAM_SHA}; nothing to compare yet."
+            echo "number=${NUMBER}" >> "$GITHUB_OUTPUT"
+            echo "initialized=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CURSOR_SHA="$(gh issue view "$NUMBER" --json body -q .body | grep -Eo '[0-9a-f]{40}' | head -n1)"
+          # A rewritten upstream history can orphan the cursor; reset to head if so.
+          if [ -z "$CURSOR_SHA" ] || ! git cat-file -e "${CURSOR_SHA}^{commit}" 2>/dev/null; then
+            echo "Cursor sha missing or unknown to upstream history; resetting to current head."
+            echo "number=${NUMBER}" >> "$GITHUB_OUTPUT"
+            echo "initialized=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
+            echo "number=${NUMBER}"
+            echo "initialized=false"
+            echo "sha=${CURSOR_SHA}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Diff touchpoints since cursor
+        id: diff
+        if: steps.cursor.outputs.initialized == 'false'
+        env:
+          CURSOR_SHA: ${{ steps.cursor.outputs.sha }}
+          UPSTREAM_SHA: ${{ steps.resolve.outputs.upstream_sha }}
+        run: |
+          if [ "$CURSOR_SHA" = "$UPSTREAM_SHA" ]; then
+            echo "Upstream unchanged since last run."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          PATHS=()
+          while IFS= read -r p; do PATHS+=("$p"); done < <(jq -r '.paths[].path' .github/upstream-touchpoints.json)
+          git diff --stat "${CURSOR_SHA}..${UPSTREAM_SHA}" -- "${PATHS[@]}" > /tmp/touchpoint-diffstat.txt
+          if [ -s /tmp/touchpoint-diffstat.txt ]; then
+            git log --oneline "${CURSOR_SHA}..${UPSTREAM_SHA}" -- "${PATHS[@]}" > /tmp/touchpoint-commits.txt
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open or update breaking-watch issue
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURSOR_SHA: ${{ steps.cursor.outputs.sha }}
+          UPSTREAM_SHA: ${{ steps.resolve.outputs.upstream_sha }}
+          UPSTREAM_SHORT: ${{ steps.resolve.outputs.upstream_short }}
+        run: |
+          gh label create upstream-breaking-watch --color D93F0B \
+            --description "Upstream T3 Code changed a fork integration point" 2>/dev/null || true
+
+          {
+            echo "Upstream \`${UPSTREAM_REPO}\` changed one or more fork integration points between \`${CURSOR_SHA:0:8}\` and \`${UPSTREAM_SHORT}\`. These paths carry the Unlock AI Workbench layer (\`.github/upstream-touchpoints.json\`); expect merge friction or behavioral drift at the next sync."
+            echo
+            echo "### Touchpoint diffstat"
+            echo
+            echo '```'
+            cat /tmp/touchpoint-diffstat.txt
+            echo '```'
+            echo
+            echo "### Upstream commits touching these paths"
+            echo
+            echo '```'
+            cat /tmp/touchpoint-commits.txt
+            echo '```'
+            echo
+            echo "Next step: review these commits before the next Upstream Sync PR lands, or run the Upstream Sync workflow now. Manual-merge steps are in \`docs/operations/upstream-sync.md\`."
+          } > /tmp/watch-issue.md
+
+          EXISTING="$(gh issue list --state open --label upstream-breaking-watch --json number -q '.[0].number')"
+          if [ -n "$EXISTING" ]; then
+            gh issue edit "$EXISTING" \
+              --title "Upstream touched integration points" \
+              --body-file /tmp/watch-issue.md
+            gh issue comment "$EXISTING" --body "Updated for upstream range \`${CURSOR_SHA:0:8}..${UPSTREAM_SHORT}\`."
+          else
+            gh issue create \
+              --title "Upstream touched integration points" \
+              --label upstream-breaking-watch \
+              --body-file /tmp/watch-issue.md
+          fi
+
+      - name: Advance cursor
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NUMBER: ${{ steps.cursor.outputs.number }}
+          UPSTREAM_SHA: ${{ steps.resolve.outputs.upstream_sha }}
+        run: |
+          {
+            echo "last-seen-upstream-sha: ${UPSTREAM_SHA}"
+            echo
+            echo "This issue stores state for \`.github/workflows/upstream-watch.yml\` so the workflow never commits to the repo. The body is machine-edited on every run; keep it open and do not edit by hand."
+          } > /tmp/cursor-body.md
+          gh issue edit "$NUMBER" --body-file /tmp/cursor-body.md

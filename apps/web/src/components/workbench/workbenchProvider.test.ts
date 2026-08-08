@@ -1,11 +1,20 @@
 import { ProviderInstanceId, type ServerProvider } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { detectedWorkbenchSkillNames, resolveWorkbenchProvider } from "./workbenchProvider";
+import {
+  detectedWorkbenchSkillNames,
+  detectedWorkbenchSkills,
+  resolveWorkbenchProvider,
+} from "./workbenchProvider";
 
 function provider(
   instanceId: string,
-  skills: ReadonlyArray<{ name: string; enabled: boolean }>,
+  skills: ReadonlyArray<{
+    name: string;
+    enabled: boolean;
+    unlockPack?: string;
+    personalizedAt?: string;
+  }>,
 ): ServerProvider {
   return {
     instanceId: ProviderInstanceId.make(instanceId),
@@ -41,5 +50,27 @@ describe("resolveWorkbenchProvider", () => {
     ]);
 
     expect([...detectedWorkbenchSkillNames(active)]).toEqual(["enabled-skill"]);
+  });
+
+  it("exposes Unlock markers per detected skill without breaking the name set", () => {
+    const active = provider("claudeAgent", [
+      {
+        name: "citation-guard",
+        enabled: true,
+        unlockPack: "citation-guard@0.1.0",
+        personalizedAt: "2026-08-07",
+      },
+      { name: "plain-skill", enabled: true },
+      { name: "disabled-skill", enabled: false, personalizedAt: "2026-08-01" },
+    ]);
+
+    const skills = detectedWorkbenchSkills(active);
+    expect(skills.get("citation-guard")).toEqual({
+      unlockPack: "citation-guard@0.1.0",
+      personalizedAt: "2026-08-07",
+    });
+    expect(skills.get("plain-skill")).toEqual({});
+    expect(skills.has("disabled-skill")).toBe(false);
+    expect([...detectedWorkbenchSkillNames(active)]).toEqual(["citation-guard", "plain-skill"]);
   });
 });

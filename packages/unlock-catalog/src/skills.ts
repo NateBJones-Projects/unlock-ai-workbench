@@ -655,6 +655,10 @@ export function renderSkillMarkdown(skill: SkillManifest): string {
     "---",
     `name: ${skill.install.name}`,
     `description: ${JSON.stringify(description)}`,
+    // Marks which catalog entry produced this installed skill so the
+    // Workbench can show it as installed. `x-unlock-personalized` is earned
+    // by completing the setup interview and is never emitted here.
+    `x-unlock-pack: ${skill.id}@${skill.version}`,
     "---",
     "",
     `# ${skill.title}`,

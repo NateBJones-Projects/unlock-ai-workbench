@@ -326,4 +326,48 @@ describe("buildBrowseGroups", () => {
     await action;
     expect(actionSettled).toBe(true);
   });
+
+  it("appends a create action after the directory entries when createPath is provided", async () => {
+    const create = vi.fn(() => Promise.resolve());
+    const groups = buildBrowseGroups({
+      browseEntries: [{ name: "Downloads", fullPath: "/Users/test/Downloads" }],
+      browseQuery: "~/new-project",
+      canBrowseUp: true,
+      upIcon: null,
+      directoryIcon: null,
+      browseUp: vi.fn(),
+      browseTo: vi.fn(),
+      createPath: { path: "~/new-project", icon: null, create },
+    });
+
+    const items = groups[0]?.items ?? [];
+    expect(items.map((item) => item.value)).toEqual([
+      "browse:up",
+      "browse:/Users/test/Downloads",
+      "browse:create",
+    ]);
+
+    const createItem = items.at(-1);
+    if (!createItem || createItem.kind !== "action") {
+      throw new Error("Expected a create action");
+    }
+    expect(createItem.title).toBe('Create "~/new-project"');
+    expect(createItem.keepOpen).toBe(true);
+    await createItem.run();
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it("omits the create action when createPath is not provided", () => {
+    const groups = buildBrowseGroups({
+      browseEntries: [{ name: "Downloads", fullPath: "/Users/test/Downloads" }],
+      browseQuery: "~/",
+      canBrowseUp: false,
+      upIcon: null,
+      directoryIcon: null,
+      browseUp: vi.fn(),
+      browseTo: vi.fn(),
+    });
+
+    expect(groups[0]?.items.map((item) => item.value)).toEqual(["browse:/Users/test/Downloads"]);
+  });
 });

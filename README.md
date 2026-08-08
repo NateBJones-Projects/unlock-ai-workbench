@@ -1,148 +1,79 @@
 # Unlock AI Workbench
 
-Unlock AI Workbench is a Nate Jones Media product surface for using the Unlock AI skill and workflow library with the AI providers people already have. It adds a guided catalog, reusable Quick Actions, and native Ringside monitoring for multi-agent Ringer runs.
+Run Nate's Unlock AI skills and workflows with the AI subscriptions you already have — and review everything at a human gate before anything leaves your machine.
 
-It is transparently powered by the open-source [T3 Code](https://github.com/pingdotgg/t3code) harness and works with Claude Code, Codex, Cursor, Grok Build, and OpenCode. Provider support comes from T3 Code; Ringer adds verified multi-agent execution above those providers.
+Unlock AI Workbench is a Nate Jones Media desktop app for subscribers. It turns the Unlock AI library into a browsable catalog, launches skills and workflows into real provider-backed threads, and adds a native Ringside panel for watching multi-agent Ringer runs. Everything runs locally from this folder; the app deliberately ships no provider credentials and no cloud sign-in.
 
-## Try the local alpha
+## What you need
 
-Clone the private repository with an authorized GitHub account, then launch it:
+Everything here is free except the AI subscription you already have. Paste each install command into the Terminal app (Applications → Utilities → Terminal). If `brew` is not found, install [Homebrew](https://brew.sh) first.
 
-```bash
-git clone https://github.com/NateBJones-Projects/unlock-ai-workbench.git
-cd unlock-ai-workbench
-./START-WORKBENCH.command
-```
+| What                   | Why                                                                 | How to get it                                                                                                                                 |
+| ---------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub access + git    | The Workbench is a private repository you clone and update with git | [GitHub Desktop](https://desktop.github.com) (easiest), or `xcode-select --install` for plain git                                             |
+| Node.js 24.13 or newer | Runs the Workbench server and app                                   | `brew install node` or [nodejs.org](https://nodejs.org)                                                                                       |
+| pnpm 11                | Installs the Workbench's locked dependencies                        | `brew install pnpm`                                                                                                                           |
+| One provider CLI       | Does the actual AI work with your existing subscription             | Claude Code: `npm install -g @anthropic-ai/claude-code`, then `claude auth login` · Codex: `npm install -g @openai/codex`, then `codex login` |
+| Python 3.13 (optional) | Only for multi-agent Ringer runs; everything else works without it  | `brew install python@3.13`                                                                                                                    |
 
-On macOS you can also double-click `START-WORKBENCH.command`. The launcher installs the locked
-JavaScript dependencies on first run, uses the Ringer snapshot committed under
-`apps/desktop/resources/ringer`, and keeps local state inside this checkout. No separate Ringer
-clone is required.
+The step-by-step version, including the GitHub Desktop path, is in [Install and first run](./docs/user/install.md).
 
-To launch from an existing terminal, run:
+## Launch it
 
-```bash
-pnpm run workbench
-```
+1. Clone this repository with an authorized GitHub account ([how](./docs/user/install.md)):
 
-Development state is isolated under this repository's `.t3` directory. See the [local v1 guide](./docs/unlock-ai-workbench-v1.md), [Ringside user guide](./docs/user/ringside.md), and [Ringer runtime operations](./docs/operations/ringer-runtime.md).
+   ```bash
+   git clone https://github.com/NateBJones-Projects/unlock-ai-workbench.git
+   ```
 
-The repository contains the Workbench UI, Unlock catalog, custom Ringer runtime, legal notices,
-and integrity lock. It deliberately does not contain provider credentials or provider CLI binaries.
-Install pnpm 11, Python 3.12 or newer, and any AI provider CLI you intend to use; authenticate that
-provider normally. The launcher finds a compatible Python interpreter automatically and reports an
-unavailable Ringer capability instead of attempting a partial launch when none is installed.
+2. Double-click `START-WORKBENCH.command` in the cloned folder. The first launch installs dependencies (a few minutes); after that it starts in seconds. If macOS blocks the double-click, right-click the file and choose **Open**.
+3. Keep the Terminal window open while you use the app. Closing it stops the Workbench.
+
+The launcher checks Node, pnpm, and Python for you and prints the exact install command for anything missing. All app state stays inside this folder's `.t3` directory, isolated from any other T3 Code installation.
+
+## Your first ten minutes
+
+Start with [Getting started](./docs/user/getting-started.md): add a project folder, confirm a provider, run **The Research Engine** end to end, and watch the **Ringer Readiness Check** in Ringside — with what-you-should-see checkpoints at every step.
+
+## Troubleshooting
+
+- **"needs Node.js" / "needs pnpm" / "Python 3.12+ was not found"** — the launcher prints the exact command to paste into Terminal. Run it, then double-click the launcher again. Python is optional; only Ringer runs need it.
+- **Provider works in Terminal but the app says it is not found** — the app inherits a different `PATH` than your Terminal. Open **Settings**, choose the provider instance, and set **Binary path** to the CLI's full path (find it with `which claude` or `which codex`).
+- **First install failed and it keeps failing** — the launcher retries the install on every launch until it succeeds. To see the full error, run `pnpm install --frozen-lockfile` from Terminal in this folder.
+- **Double-clicking the launcher is blocked by macOS** — right-click `START-WORKBENCH.command` and choose **Open**. Details in [Install and first run](./docs/user/install.md).
 
 ## Powered by T3 Code
 
-T3 Code is an "agent harness control surface". It enables control of the agents on your machine with a mobile app ([iOS](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824), [Android](https://play.google.com/store/apps/details?id=com.t3tools.t3code)), [web app](https://app.t3.codes), and [Electron-based desktop app](https://t3.codes).
+Unlock AI Workbench is transparently powered by the open-source [T3 Code](https://github.com/pingdotgg/t3code) agent harness built by T3 Tools. T3 Code provides the threads, projects, terminals, provider processes, and permission system; the Workbench adds the Unlock catalog, Quick Actions, Ringside, and the pinned Ringer runtime on top. This fork keeps the upstream MIT notice and attribution; it is a distinct customization and does not imply T3 Tools endorsement.
 
-## Upstream project
+The T3 Code foundation remains under its original [MIT license](./LICENSE). Ringer/Ringside ships with its PolyForm Shield terms, required copyright notice, and Nate Jones Media's separate product-specific authorization for Unlock AI Workbench. See [Third-party notices](./THIRD_PARTY_NOTICES.md) and [Ringer product authorization](./RINGER_PRODUCT_AUTHORIZATION.md).
 
-T3 Code was built by T3 Tools as an open, performant, remote-ready agent interface. This fork keeps its MIT notice and upstream attribution; Unlock AI Workbench is a distinct customization and does not imply T3 Tools endorsement.
+## Nate, everywhere
 
-We wanted something performant, remote-ready, and truly open. If we ever go the wrong direction, we want you to have everything you need to fork and build the editor that you want.
+The Workbench runs the skills; the thinking behind them is published on Nate's other surfaces.
 
-## Installation
-
-> [!WARNING]
-> T3 Code currently supports Codex, Claude, Cursor, Grok Build and OpenCode. Install and authenticate at least one provider before use:
->
-> - Codex: install [Codex CLI](https://developers.openai.com/codex/cli) and run `codex login`
-> - Claude: install [Claude Code](https://claude.com/product/claude-code) and run `claude auth login`
-> - Cursor: install [Cursor CLI](https://cursor.com/cli) and run `agent login`
-> - Grok Build: install [Grok Build CLI](https://x.ai/cli) and run `grok login`
-> - OpenCode: install [OpenCode](https://opencode.ai) and run `opencode auth login`
-
-### Try it out (install-free)
-
-The easiest way to test T3 Code is to run the server in your terminal (requires Node.js 22.16+, 23.11+, or 24.10+):
-
-```bash
-npx t3@latest
-```
-
-This will launch T3 Code's backend on your machine as well as the local web app to control your agents.
-
-Tip: Use `npx t3@latest --help` for the full CLI reference.
-
-### Desktop app
-
-Install the latest version of the desktop app from [GitHub Releases](https://github.com/pingdotgg/t3code/releases), or from your favorite package registry:
-
-#### Windows (`winget`)
-
-```bash
-winget install T3Tools.T3Code
-```
-
-#### macOS (Homebrew)
-
-```bash
-brew install --cask t3-code
-```
-
-#### Arch Linux (AUR)
-
-```bash
-yay -S t3code-bin
-```
-
-## Some notes
-
-We are very very early in this project. Expect bugs.
-
-We are (mostly) not accepting contributions yet. Small fixes may be considered. Big features will not be.
+- [Unlock AI guides](https://unlock-ai.natebjones.com) — the published field-guide library this Workbench's catalog links back to.
+- [Nate's Newsletter on Substack](https://natesnewsletter.substack.com) — essays and analysis on AI strategy, the writing the guides grew out of.
+- [YouTube](https://www.youtube.com/@NateBJones) — video breakdowns of AI news, models, and working methods.
+- [AI News & Strategy Daily](https://podcasts.apple.com/us/podcast/ai-news-strategy-daily-with-nate-b-jones/id1877109372) — the daily podcast, for when you are away from a screen.
+- [TikTok](https://www.tiktok.com/@nate.b.jones) — short-form takes on what just changed in AI.
+- [natebjones.com](https://www.natebjones.com) — Nate's website, the front door to all of it.
 
 ## Documentation
 
-Full docs live in [docs/](./docs). There's no docs site yet.
+Full docs live in [docs/](./docs).
 
+- [Getting started — your first ten minutes](./docs/user/getting-started.md)
+- [Install and first run](./docs/user/install.md)
+- [Visual tour (screenshots of every surface)](./docs/user/visual-tour.md)
 - [Unlock AI Workbench local v1](./docs/unlock-ai-workbench-v1.md)
 - [Using Ringside](./docs/user/ringside.md)
-- [Ringer integration architecture](./docs/internals/ringer-integration.md)
-- [Ringer runtime operations](./docs/operations/ringer-runtime.md)
-- [Install and first run](./docs/user/install.md)
 - [Permission modes](./docs/user/permission-modes.md)
 - [Keyboard shortcuts](./docs/user/keybindings.md)
 - [Remote access from a phone or another machine](./docs/user/remote-access.md)
-- [Keeping app and server in sync](./docs/user/updating.md)
+- [Updating the Workbench](./docs/user/updating.md)
 - [Source control integrations](./docs/user/source-control.md)
 - Multiple accounts: [Codex](./docs/user/providers-codex.md) · [Claude](./docs/user/providers-claude.md)
-- Linux: [run T3 Code as a background service](./docs/user/background-service.md)
+- Maintainers: [architecture overview](./docs/internals/overview.md), [Ringer integration](./docs/internals/ringer-integration.md), [Ringer runtime operations](./docs/operations/ringer-runtime.md), [upstream T3 Code reference](./docs/internals/upstream-t3.md)
 
-Building from source? Start at [docs/internals/overview.md](./docs/internals/overview.md).
-
-## Licensing and attribution
-
-The T3 Code foundation remains under its original MIT license. Ringer/Ringside ships with its PolyForm Shield terms, required copyright notice, and Nate Jones Media's separate product-specific authorization for Unlock AI Workbench. See [Third-party notices](./THIRD_PARTY_NOTICES.md) and [Ringer product authorization](./RINGER_PRODUCT_AUTHORIZATION.md).
-
-## If you REALLY want to contribute still.... read this first
-
-### Install `vp`
-
-T3 Code uses Vite+ so you'll need to install the global `vp` command-line tool.
-
-#### macOS / Linux
-
-```bash
-curl -fsSL https://vite.plus | bash
-```
-
-#### Windows
-
-```bash
-irm https://vite.plus/ps1 | iex
-```
-
-Checkout their getting started guide for more information: https://viteplus.dev/guide/
-
-### Install dependencies
-
-```bash
-vp i
-```
-
-Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening an issue or PR.
-
-Need support? Join the [Discord](https://discord.gg/jn4EGJjrvv).
+This is a private alpha. Expect rough edges, and see [CONTRIBUTING.md](./CONTRIBUTING.md) for how to report problems.

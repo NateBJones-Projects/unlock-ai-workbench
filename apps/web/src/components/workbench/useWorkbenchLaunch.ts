@@ -7,6 +7,7 @@ import { useComposerDraftStore } from "../../composerDraftStore";
 import { useHandleNewThread } from "../../hooks/useHandleNewThread";
 import { startNewThreadFromContext } from "../../lib/chatThreadActions";
 import { useRightPanelStore } from "../../rightPanelStore";
+import { useProjects } from "../../state/entities";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { recordWorkbenchLaunch, type WorkbenchLaunchProvenance } from "./workbenchLaunchStore";
 
@@ -19,6 +20,7 @@ export interface WorkbenchPromptLaunchOptions {
 
 export function useWorkbenchLaunch() {
   const context = useHandleNewThread();
+  const projects = useProjects();
   const [launchingId, setLaunchingId] = useState<string | null>(null);
 
   const requireProject = useCallback(
@@ -91,6 +93,23 @@ export function useWorkbenchLaunch() {
         if (options?.openRingside) {
           useRightPanelStore.getState().open(threadRef, "agents");
         }
+        const projectName = projects.find(
+          (project) =>
+            project.environmentId === projectRef.environmentId &&
+            project.id === projectRef.projectId,
+        )?.title;
+        toastManager.add(
+          stackedThreadToast({
+            type: "info",
+            title: "Nothing has run yet",
+            description:
+              options?.provenance?.kind === "workflow"
+                ? projectName
+                  ? `Workflow prepared in "${projectName}" — review the prompt, add your source, then press Send.`
+                  : "Workflow prepared — review the prompt, add your source, then press Send."
+                : "Prompt prepared — review it and press Send.",
+          }),
+        );
         return threadRef;
       } catch (error) {
         toastManager.add(
@@ -105,7 +124,7 @@ export function useWorkbenchLaunch() {
         setLaunchingId(null);
       }
     },
-    [context, requireProject],
+    [context, projects, requireProject],
   );
 
   return {

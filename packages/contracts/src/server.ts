@@ -93,6 +93,11 @@ export const ServerProviderSkill = Schema.Struct({
   enabled: Schema.Boolean,
   displayName: Schema.optional(TrimmedNonEmptyString),
   shortDescription: Schema.optional(TrimmedNonEmptyString),
+  // Unlock AI markers read from the installed SKILL.md frontmatter:
+  // `x-unlock-pack` (<catalog-id>@<version> that produced the skill) and
+  // `x-unlock-personalized` (date the setup interview was written in).
+  unlockPack: Schema.optional(TrimmedNonEmptyString),
+  personalizedAt: Schema.optional(TrimmedNonEmptyString),
 });
 export type ServerProviderSkill = typeof ServerProviderSkill.Type;
 

@@ -3,13 +3,18 @@ import { expect, it } from "@effect/vitest";
 import {
   EnvironmentId,
   RINGER_WORKBENCH_DIAGNOSTIC_TEMPLATE_ID,
+  RingerExecutionError,
   RingerMemberId,
+  RingerUnavailableError,
   ThreadId,
+  type RingerThreadEvent,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as Queue from "effect/Queue";
+import * as Stream from "effect/Stream";
 
 import * as ServerConfig from "../config.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
@@ -75,6 +80,9 @@ const rawState = (backendRunId: string, finished = false): RawRingerRunState => 
 
 interface FakeControl {
   digest: string;
+  hudFails: boolean;
+  cancelFails: boolean;
+  cancelFinishes: boolean;
   readonly backendByLaunch: Map<string, string>;
   readonly states: Map<string, RawRingerRunState>;
   readonly stateReads: RingerRuntimeStateInput[];
@@ -94,6 +102,9 @@ const makeFakeRuntime = (): {
   let counter = 0;
   const control: FakeControl = {
     digest: digestA,
+    hudFails: false,
+    cancelFails: false,
+    cancelFinishes: true,
     backendByLaunch: new Map(),
     states: new Map(),
     stateReads: [],
@@ -107,9 +118,13 @@ const makeFakeRuntime = (): {
   const service = RingerRuntime.of({
     probe: Effect.sync(() => ({ available: true, runtimeDigest: control.digest })),
     ensureHud: (input) =>
-      Effect.sync(() => {
+      Effect.suspend(() => {
         control.hudInputs.push(input);
-        return 43_123;
+        return control.hudFails
+          ? Effect.fail(
+              new RingerUnavailableError({ operation: "launch", reason: "hud-unavailable" }),
+            )
+          : Effect.succeed(43_123);
       }),
     launch: (input) =>
       Effect.sync(() => {
@@ -125,9 +140,15 @@ const makeFakeRuntime = (): {
         return control.states.get(input.backendRunId);
       }),
     cancel: (input) =>
-      Effect.sync(() => {
+      Effect.suspend(() => {
         control.cancels.push(input);
-        control.states.set(input.backendRunId, rawState(input.backendRunId, true));
+        if (control.cancelFails) {
+          return Effect.fail(new RingerExecutionError({ operation: "cancel", stage: "control" }));
+        }
+        if (control.cancelFinishes) {
+          control.states.set(input.backendRunId, rawState(input.backendRunId, true));
+        }
+        return Effect.void;
       }),
     readProof: () =>
       Effect.succeed({
@@ -333,6 +354,172 @@ it.effect(
       expect(secondHud?.preferredPort).toBeUndefined();
       expect(secondHud?.instanceNonce).not.toBe(firstHud?.instanceNonce);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("restores the run's true status and keeps cancel retryable when the cancel fails", () =>
+  Effect.gen(function* () {
+    if (process.platform !== "darwin") return;
+    const fs = yield* FileSystem.FileSystem;
+    const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "ringer-cancel-rollback-test-" });
+    const fake = makeFakeRuntime();
+    const threadId = ThreadId.make("thread-cancel-rollback");
+
+    yield* Effect.gen(function* () {
+      const service = yield* RingerRunService.RingerRunService;
+      const launched = yield* service.launch({
+        threadId,
+        templateId: RINGER_WORKBENCH_DIAGNOSTIC_TEMPLATE_ID,
+      });
+      yield* service.status({ threadId, runId: launched.runId });
+
+      fake.control.cancelFails = true;
+      const failure = yield* service.cancel({ threadId, runId: launched.runId }).pipe(Effect.flip);
+      expect(failure._tag).toBe("RingerExecutionError");
+      expect(fake.control.cancels).toHaveLength(1);
+
+      const restored = yield* service.status({ threadId, runId: launched.runId });
+      expect(restored.status).toBe("running");
+      expect(restored.operations.cancel).toBe(true);
+
+      fake.control.finish(launched.runId);
+      const finished = yield* service.status({ threadId, runId: launched.runId });
+      expect(finished.status).toBe("succeeded");
+    }).pipe(Effect.provide(serviceLayer(baseDir, fake.service)));
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("keeps cancel retryable while a run is still canceling", () =>
+  Effect.gen(function* () {
+    if (process.platform !== "darwin") return;
+    const fs = yield* FileSystem.FileSystem;
+    const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "ringer-cancel-retry-test-" });
+    const fake = makeFakeRuntime();
+    fake.control.cancelFinishes = false;
+    const threadId = ThreadId.make("thread-cancel-retry");
+
+    yield* Effect.gen(function* () {
+      const service = yield* RingerRunService.RingerRunService;
+      const launched = yield* service.launch({
+        threadId,
+        templateId: RINGER_WORKBENCH_DIAGNOSTIC_TEMPLATE_ID,
+      });
+      yield* service.status({ threadId, runId: launched.runId });
+
+      const canceling = yield* service.cancel({ threadId, runId: launched.runId });
+      expect(canceling.status).toBe("canceling");
+      expect(canceling.operations.cancel).toBe(true);
+
+      yield* service.cancel({ threadId, runId: launched.runId });
+      expect(fake.control.cancels).toHaveLength(2);
+    }).pipe(Effect.provide(serviceLayer(baseDir, fake.service)));
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("dismisses only terminal runs, publishes the removal, and persists it", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "ringer-dismiss-test-" });
+    const fake = makeFakeRuntime();
+    const threadId = ThreadId.make("thread-dismiss");
+
+    yield* Effect.gen(function* () {
+      const service = yield* RingerRunService.RingerRunService;
+      const launched = yield* service.launch({
+        threadId,
+        templateId: RINGER_WORKBENCH_DIAGNOSTIC_TEMPLATE_ID,
+      });
+      yield* service.status({ threadId, runId: launched.runId });
+
+      const rejected = yield* service
+        .dismiss({ threadId, runId: launched.runId })
+        .pipe(Effect.flip);
+      expect(rejected._tag).toBe("RingerRunNotDismissableError");
+
+      const queue = yield* Queue.unbounded<RingerThreadEvent>();
+      yield* service.observe({ threadId }).pipe(
+        Stream.runForEach((event) => Queue.offer(queue, event)),
+        Effect.forkChild,
+      );
+      const first = yield* Queue.take(queue);
+      expect(first.type).toBe("snapshot");
+
+      fake.control.finish(launched.runId);
+      const finished = yield* service.status({ threadId, runId: launched.runId });
+      expect(finished.status).toBe("succeeded");
+
+      yield* service.dismiss({ threadId, runId: launched.runId });
+      let event = yield* Queue.take(queue);
+      while (event.type !== "removed") event = yield* Queue.take(queue);
+      expect(event.runId).toBe(launched.runId);
+
+      expect((yield* service.list({ threadId })).runs).toHaveLength(0);
+      const missing = yield* service.status({ threadId, runId: launched.runId }).pipe(Effect.flip);
+      expect(missing._tag).toBe("RingerRunNotFoundError");
+    }).pipe(Effect.provide(serviceLayer(baseDir, fake.service)));
+
+    const persisted = yield* fs.readFileString(
+      path.join(baseDir, "userdata", "ringer-attachments.json"),
+    );
+    expect(persisted).toContain('"attachments":[]');
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("rehydrates terminal runs to their persisted terminal projection after restart", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "ringer-terminal-restart-test-" });
+    const fake = makeFakeRuntime();
+    const threadId = ThreadId.make("thread-terminal-restart");
+
+    const launched = yield* Effect.gen(function* () {
+      const service = yield* RingerRunService.RingerRunService;
+      const run = yield* service.launch({
+        threadId,
+        templateId: RINGER_WORKBENCH_DIAGNOSTIC_TEMPLATE_ID,
+      });
+      fake.control.finish(run.runId);
+      const finished = yield* service.status({ threadId, runId: run.runId });
+      expect(finished.status).toBe("succeeded");
+      return finished;
+    }).pipe(Effect.provide(serviceLayer(baseDir, fake.service)));
+
+    const amnesiac = makeFakeRuntime();
+    yield* Effect.gen(function* () {
+      const service = yield* RingerRunService.RingerRunService;
+      const listed = yield* service.list({ threadId });
+      expect(listed.runs).toHaveLength(1);
+      expect(listed.runs[0]?.status).toBe("succeeded");
+      expect(listed.runs[0]?.finishedAt).not.toBeNull();
+      expect(listed.runs[0]?.totals.passed).toBe(1);
+      const status = yield* service.status({ threadId, runId: launched.runId });
+      expect(status.status).toBe("succeeded");
+    }).pipe(Effect.provide(serviceLayer(baseDir, amnesiac.service)));
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("reuses the persisted HUD nonce when a failed HUD launch is retried", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "ringer-hud-retry-test-" });
+    const fake = makeFakeRuntime();
+    fake.control.hudFails = true;
+    const threadId = ThreadId.make("thread-hud-retry");
+
+    yield* Effect.gen(function* () {
+      const service = yield* RingerRunService.RingerRunService;
+      const failure = yield* service
+        .launch({ threadId, templateId: RINGER_WORKBENCH_DIAGNOSTIC_TEMPLATE_ID })
+        .pipe(Effect.flip);
+      expect(failure._tag).toBe("RingerUnavailableError");
+      fake.control.hudFails = false;
+      yield* service.launch({ threadId, templateId: RINGER_WORKBENCH_DIAGNOSTIC_TEMPLATE_ID });
+    }).pipe(Effect.provide(serviceLayer(baseDir, fake.service)));
+
+    expect(fake.control.hudInputs).toHaveLength(2);
+    expect(fake.control.hudInputs[1]?.instanceNonce).toBe(fake.control.hudInputs[0]?.instanceNonce);
+    expect(fake.control.hudInputs[1]?.preferredPort).toBeUndefined();
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 
 it.effect(

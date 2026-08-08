@@ -25,6 +25,7 @@ import {
   type SourceControlRepositoryInfo,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
 } from "@t3tools/contracts";
+import type { BaseUIEvent } from "@base-ui/react/types";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import {
@@ -173,6 +174,15 @@ function getEnvironmentBrowsePlatform(os: string | null | undefined): string {
     return "Linux";
   }
   return typeof navigator === "undefined" ? "" : navigator.platform;
+}
+
+// Enter handling reads aria-activedescendant (the autocomplete's live
+// highlight) and only trusts it while the referenced row is still rendered.
+function hasVisibleHighlightedListRow(input: HTMLInputElement): boolean {
+  const activeDescendantId = input.getAttribute("aria-activedescendant");
+  return (
+    activeDescendantId !== null && input.ownerDocument.getElementById(activeDescendantId) !== null
+  );
 }
 
 interface AddProjectEnvironmentOption {
@@ -1838,6 +1848,25 @@ function OpenCommandPaletteDialog(props: {
 
   const canBrowseUp = !relativePathNeedsActiveProject && browsePath.canBrowseUp;
 
+  const hasHighlightedBrowseItem = highlightedItemValue?.startsWith("browse:") ?? false;
+  const canSubmitBrowsePath =
+    isBrowsing &&
+    !relativePathNeedsActiveProject &&
+    canCreateProjectInEnvironment(browseEnvironment?.connection.phase);
+  const isCloneDestinationStep = addProjectCloneFlow?.step === "confirm";
+  const submitBrowsePath = () => {
+    if (isCloneDestinationStep) {
+      void submitAddProjectCloneFlow(resolvedAddProjectPath);
+    } else {
+      void handleAddProject(resolvedAddProjectPath);
+    }
+  };
+  const canCreateBrowsePath =
+    canSubmitBrowsePath &&
+    !isBrowsePending &&
+    query.trim().length > 0 &&
+    (hasTrailingPathSeparator(query) ? !browseResult : exactBrowseEntry === null);
+
   const browseGroups = buildBrowseGroups({
     browseEntries: visibleBrowseEntries,
     browseQuery: query,
@@ -1846,6 +1875,15 @@ function OpenCommandPaletteDialog(props: {
     directoryIcon: <FolderIcon className={ITEM_ICON_CLASS} />,
     browseUp,
     browseTo,
+    ...(canCreateBrowsePath
+      ? {
+          createPath: {
+            path: resolvedAddProjectPath,
+            icon: <FolderPlusIcon className={ITEM_ICON_CLASS} />,
+            create: submitBrowsePath,
+          },
+        }
+      : {}),
   });
   const cloneDestinationBrowseGroups = useMemo(
     () =>
@@ -1880,20 +1918,9 @@ function OpenCommandPaletteDialog(props: {
     remoteProjectInputPlaceholder(addProjectCloneFlow) ??
     getCommandPaletteInputPlaceholder(paletteMode);
   const isSubmenu = paletteMode === "submenu" || paletteMode === "submenu-browse";
-  const hasHighlightedBrowseItem = highlightedItemValue?.startsWith("browse:") ?? false;
-  const canSubmitBrowsePath =
-    isBrowsing &&
-    !relativePathNeedsActiveProject &&
-    canCreateProjectInEnvironment(browseEnvironment?.connection.phase);
-  const willCreateProjectPath =
-    canSubmitBrowsePath &&
-    !isBrowsePending &&
-    query.trim().length > 0 &&
-    !hasHighlightedBrowseItem &&
-    (hasTrailingPathSeparator(query) ? !browseResult : exactBrowseEntry === null);
+  const willCreateProjectPath = canCreateBrowsePath && !hasHighlightedBrowseItem;
   const useMetaForMod = isMacPlatform(navigator.platform);
   const submitModifierLabel = useMetaForMod ? "\u2318" : "Ctrl";
-  const isCloneDestinationStep = addProjectCloneFlow?.step === "confirm";
   const submitActionLabel = isCloneDestinationStep
     ? willCreateProjectPath
       ? "Create & Clone"
@@ -1954,7 +1981,7 @@ function OpenCommandPaletteDialog(props: {
     return useMetaForMod ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
   }
 
-  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
+  function handleKeyDown(event: BaseUIEvent<KeyboardEvent<HTMLInputElement>>): void {
     const command = resolveShortcutCommand(event, keybindings, {
       platform: navigator.platform,
       context: { modelPickerOpen: false },
@@ -1980,15 +2007,12 @@ function OpenCommandPaletteDialog(props: {
     const shouldSubmitBrowsePath =
       canSubmitBrowsePath &&
       event.key === "Enter" &&
-      (!hasHighlightedBrowseItem || isPrimaryModifierPressed(event));
+      (!hasVisibleHighlightedListRow(event.currentTarget) || isPrimaryModifierPressed(event));
 
     if (shouldSubmitBrowsePath) {
       event.preventDefault();
-      if (isCloneDestinationStep) {
-        void submitAddProjectCloneFlow(resolvedAddProjectPath);
-      } else {
-        void handleAddProject(resolvedAddProjectPath);
-      }
+      event.preventBaseUIHandler();
+      submitBrowsePath();
       return;
     }
 
@@ -2187,11 +2211,7 @@ function OpenCommandPaletteDialog(props: {
                 if (relativePathNeedsActiveProject) {
                   return;
                 }
-                if (isCloneDestinationStep) {
-                  void submitAddProjectCloneFlow(resolvedAddProjectPath);
-                } else {
-                  void handleAddProject(resolvedAddProjectPath);
-                }
+                submitBrowsePath();
               }}
             />
           }

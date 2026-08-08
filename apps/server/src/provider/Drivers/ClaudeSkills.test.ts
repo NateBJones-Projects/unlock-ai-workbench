@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
-import { discoverClaudeSkills } from "./ClaudeSkills.ts";
+import { discoverClaudeSkills, readUnlockSkillMarkers } from "./ClaudeSkills.ts";
 
 const writeSkill = Effect.fn(function* (
   skillsDir: string,
@@ -63,6 +63,81 @@ it.layer(NodeServices.layer)("discoverClaudeSkills", (it) => {
           description: "Deploy the app.",
         },
       ]);
+    }),
+  );
+
+  it.effect("carries Unlock markers from frontmatter and omits them when absent", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-claude-skills-" });
+      const configDir = path.join(tempDir, "claude-home");
+      const skillsDir = path.join(configDir, "skills");
+
+      yield* writeSkill(
+        skillsDir,
+        "citation-guard",
+        [
+          "---",
+          "name: citation-guard",
+          "description: Validate citations.",
+          "x-unlock-pack: citation-guard@0.1.0",
+          "x-unlock-personalized: 2026-08-07",
+          "---",
+        ].join("\n"),
+      );
+      yield* writeSkill(
+        skillsDir,
+        "plain-skill",
+        ["---", "name: plain-skill", "description: No markers.", "---"].join("\n"),
+      );
+
+      const skills = yield* discoverClaudeSkills({ homePath: configDir }, undefined);
+
+      const marked = skills.find((skill) => skill.name === "citation-guard");
+      assert.equal(marked?.unlockPack, "citation-guard@0.1.0");
+      assert.equal(marked?.personalizedAt, "2026-08-07");
+
+      const plain = skills.find((skill) => skill.name === "plain-skill");
+      assert.equal(plain?.unlockPack, undefined);
+      assert.equal(plain?.personalizedAt, undefined);
+    }),
+  );
+
+  it.effect("reads Unlock markers from a SKILL.md path or a skill directory", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-claude-skills-" });
+      const skillsDir = path.join(tempDir, "skills");
+
+      yield* writeSkill(
+        skillsDir,
+        "packet-export",
+        [
+          "---",
+          "name: packet-export",
+          "x-unlock-pack: packet-export@0.1.0",
+          "x-unlock-personalized: 2026-08-07",
+          "---",
+        ].join("\n"),
+      );
+
+      // The Codex app-server reports skill paths without frontmatter, so the
+      // driver reads markers from disk — from the file or its directory.
+      const fromFile = yield* readUnlockSkillMarkers(
+        path.join(skillsDir, "packet-export", "SKILL.md"),
+      );
+      assert.deepEqual(fromFile, {
+        unlockPack: "packet-export@0.1.0",
+        personalizedAt: "2026-08-07",
+      });
+
+      const fromDirectory = yield* readUnlockSkillMarkers(path.join(skillsDir, "packet-export"));
+      assert.deepEqual(fromDirectory, fromFile);
+
+      const fromMissing = yield* readUnlockSkillMarkers(path.join(skillsDir, "not-installed"));
+      assert.deepEqual(fromMissing, {});
     }),
   );
 

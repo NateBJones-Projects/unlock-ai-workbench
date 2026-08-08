@@ -159,6 +159,7 @@ import {
   RingerArtifactReadInput,
   RingerCapabilitiesInput,
   RingerCapabilitySnapshot,
+  RingerDismissInput,
   RingerError,
   RingerGateInput,
   RingerLaunchInput,
@@ -249,6 +250,7 @@ export const WS_METHODS = {
   ringerLaunch: "ringer.launch",
   ringerGetStatus: "ringer.getStatus",
   ringerCancel: "ringer.cancel",
+  ringerDismiss: "ringer.dismiss",
   ringerRetry: "ringer.retry",
   ringerGate: "ringer.gate",
   ringerGetProof: "ringer.getProof",
@@ -743,6 +745,11 @@ export const WsRingerCancelRpc = Rpc.make(WS_METHODS.ringerCancel, {
   error: RingerRpcError,
 });
 
+export const WsRingerDismissRpc = Rpc.make(WS_METHODS.ringerDismiss, {
+  payload: RingerDismissInput,
+  error: RingerRpcError,
+});
+
 export const WsRingerRetryRpc = Rpc.make(WS_METHODS.ringerRetry, {
   payload: RingerRetryInput,
   success: RingerRunProjection,
@@ -977,6 +984,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsRingerLaunchRpc,
   WsRingerGetStatusRpc,
   WsRingerCancelRpc,
+  WsRingerDismissRpc,
   WsRingerRetryRpc,
   WsRingerGateRpc,
   WsRingerGetProofRpc,

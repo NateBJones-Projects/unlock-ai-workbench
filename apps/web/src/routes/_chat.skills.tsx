@@ -1,7 +1,10 @@
 import {
+  blueprintInstallName,
   SKILL_BLUEPRINT_CATEGORIES,
   SKILL_BLUEPRINTS,
   SKILLS,
+  V1_SKILL_PROVIDER_COMPATIBILITY,
+  type ProviderDriver,
   type SkillManifest,
 } from "@t3tools/unlock-catalog";
 import { createFileRoute } from "@tanstack/react-router";
@@ -12,6 +15,7 @@ import {
   ExternalLinkIcon,
   SearchIcon,
   ShieldIcon,
+  SparklesIcon,
   WrenchIcon,
 } from "lucide-react";
 import { useMemo, useState, type ReactElement } from "react";
@@ -20,7 +24,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { WorkbenchPageShell, WorkbenchSection } from "../components/workbench/WorkbenchPageShell";
 import {
-  detectedWorkbenchSkillNames,
+  detectedWorkbenchSkills,
   resolveWorkbenchProvider,
 } from "../components/workbench/workbenchProvider";
 import {
@@ -32,6 +36,18 @@ import { useWorkbenchLaunch } from "../components/workbench/useWorkbenchLaunch";
 import { useProjects, useServerConfigs } from "../state/entities";
 
 const MANIFEST_BY_ID = new Map<string, SkillManifest>(SKILLS.map((skill) => [skill.id, skill]));
+
+const PROVIDER_RUNTIME_NAMES: Record<ProviderDriver, string> = {
+  codex: "Codex",
+  claudeAgent: "Claude Code",
+  opencode: "OpenCode",
+  cursor: "Cursor",
+  grok: "Grok",
+};
+
+const VERIFIED_RUNTIME_NAMES = V1_SKILL_PROVIDER_COMPATIBILITY.filter(
+  (provider) => provider.status === "ready",
+).map((provider) => PROVIDER_RUNTIME_NAMES[provider.driver]);
 
 function SkillsRouteView() {
   const projects = useProjects();
@@ -54,7 +70,7 @@ function SkillsRouteView() {
     launchProject?.defaultModelSelection?.instanceId ??
     null;
   const activeProvider = resolveWorkbenchProvider(providers, preferredProviderInstanceId);
-  const detectedSkills = detectedWorkbenchSkillNames(activeProvider);
+  const detectedSkills = detectedWorkbenchSkills(activeProvider);
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const visibleSkills = useMemo(() => {
@@ -87,7 +103,11 @@ function SkillsRouteView() {
           detail="Every local Unlock AI blueprint"
         />
         <Metric label="Verified packs" value={String(SKILLS.length)} detail="Hardened for v1" />
-        <Metric label="Verified runtimes" value="2" detail="Claude Code and Codex native skills" />
+        <Metric
+          label="Verified runtimes"
+          value={String(VERIFIED_RUNTIME_NAMES.length)}
+          detail={`${VERIFIED_RUNTIME_NAMES.join(" and ")} native skills`}
+        />
       </div>
 
       <div className="relative mb-8 max-w-xl">
@@ -114,9 +134,12 @@ function SkillsRouteView() {
             <div className="divide-y divide-border border-y border-border">
               {skills.map((skill) => {
                 const manifest = MANIFEST_BY_ID.get(skill.id);
-                const installed = manifest
-                  ? detectedSkills.has(manifest.install.name)
-                  : detectedSkills.has(skill.id);
+                const installName = manifest?.install.name ?? blueprintInstallName(skill);
+                const installedMeta = detectedSkills.get(installName);
+                const installed = installedMeta !== undefined;
+                const personalizedLabel = installedMeta?.personalizedAt
+                  ? formatPersonalizedLabel(installedMeta.personalizedAt)
+                  : null;
                 const actionId = `skill:${skill.id}`;
                 const setupPrompt = manifest
                   ? verifiedSkillSetupPrompt(manifest)
@@ -131,12 +154,15 @@ function SkillsRouteView() {
                             {skill.title}
                           </h2>
                           {installed ? (
-                            <Status tone="success" icon={<CheckIcon />} label="Detected" />
+                            <Status tone="success" icon={<CheckIcon />} label="Installed" />
                           ) : manifest ? (
                             <Status tone="cyan" icon={<ShieldIcon />} label="Verified pack" />
                           ) : (
                             <Status tone="muted" icon={<WrenchIcon />} label="Blueprint" />
                           )}
+                          {personalizedLabel ? (
+                            <Status tone="cyan" icon={<SparklesIcon />} label={personalizedLabel} />
+                          ) : null}
                         </div>
                         <p className="mt-1 max-w-4xl text-sm leading-6 text-muted-foreground">
                           {skill.whatItDoes}
@@ -145,7 +171,10 @@ function SkillsRouteView() {
                           <span>
                             {manifest ? "Codex + Claude Code verified" : "Interview-led setup"}
                           </span>
-                          <span>{skill.whatYouNeed.length} setup inputs</span>
+                          <span>
+                            {skill.whatYouNeed.length}{" "}
+                            {skill.whatYouNeed.length === 1 ? "setup input" : "setup inputs"}
+                          </span>
                           {manifest ? <span>Deny by default</span> : null}
                         </div>
                       </div>
@@ -157,22 +186,18 @@ function SkillsRouteView() {
                             variant="outline"
                             disabled={launchingId !== null}
                             onClick={() =>
-                              void launchPrompt(
-                                `${actionId}:use`,
-                                skillUsePrompt(manifest?.install.name ?? skill.id),
-                                {
-                                  provenance: {
-                                    kind: "skill",
-                                    catalogId: skill.id,
-                                    title: skill.title,
-                                    version: manifest?.version ?? null,
-                                    strategy: "native-skill",
-                                  },
+                              void launchPrompt(`${actionId}:use`, skillUsePrompt(installName), {
+                                provenance: {
+                                  kind: "skill",
+                                  catalogId: skill.id,
+                                  title: skill.title,
+                                  version: manifest?.version ?? null,
+                                  strategy: "native-skill",
                                 },
-                              )
+                              })
                             }
                           >
-                            Use in thread
+                            {launchingId === `${actionId}:use` ? "Opening…" : "Use in thread"}
                             <ArrowRightIcon />
                           </Button>
                         ) : (
@@ -242,6 +267,18 @@ function SkillsRouteView() {
       ) : null}
     </WorkbenchPageShell>
   );
+}
+
+/** Renders the `x-unlock-personalized` date as e.g. "Personalized Aug 7". */
+function formatPersonalizedLabel(personalizedAt: string): string {
+  const parsed = new Date(`${personalizedAt}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return "Personalized";
+  const sameYear = parsed.getFullYear() === new Date().getFullYear();
+  return `Personalized ${parsed.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+  })}`;
 }
 
 function Status({

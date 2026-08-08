@@ -1,0 +1,228 @@
+name: Upstream Sync
+
+on:
+  schedule:
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+
+env:
+  UPSTREAM_REPO: pingdotgg/t3code
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout with full history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git fetch upstream --tags --prune
+
+      - name: Resolve branches and upstream head
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          UPSTREAM_DEFAULT="$(gh repo view "$UPSTREAM_REPO" --json defaultBranchRef -q .defaultBranchRef.name)"
+          FORK_DEFAULT="$(gh repo view "$GITHUB_REPOSITORY" --json defaultBranchRef -q .defaultBranchRef.name)"
+          UPSTREAM_SHA="$(git rev-parse "upstream/${UPSTREAM_DEFAULT}")"
+          {
+            echo "upstream_default=${UPSTREAM_DEFAULT}"
+            echo "fork_default=${FORK_DEFAULT}"
+            echo "upstream_sha=${UPSTREAM_SHA}"
+            echo "upstream_short=${UPSTREAM_SHA:0:8}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check whether a sync is needed
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM_SHA: ${{ steps.resolve.outputs.upstream_sha }}
+          UPSTREAM_SHORT: ${{ steps.resolve.outputs.upstream_short }}
+          FORK_DEFAULT: ${{ steps.resolve.outputs.fork_default }}
+        run: |
+          # Already merged into the fork default branch: nothing to do.
+          if git merge-base --is-ancestor "$UPSTREAM_SHA" "origin/${FORK_DEFAULT}"; then
+            echo "Upstream head ${UPSTREAM_SHORT} already contained in ${FORK_DEFAULT}; exiting."
+            echo "action=none" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # A sync PR/branch for this exact upstream sha already exists: exit quietly.
+          if gh pr list --state all --search "in:title ${UPSTREAM_SHORT}" \
+              --json headRefName -q '.[].headRefName' | grep -q '^upstream-sync/'; then
+            echo "A sync PR for upstream ${UPSTREAM_SHORT} already exists; exiting."
+            echo "action=none" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Guard against stacking a second open sync PR.
+          OPEN_SYNC_PR="$(gh pr list --state open --json number,headRefName \
+            -q '.[] | select(.headRefName | startswith("upstream-sync/")) | .number' | head -n1)"
+          if [ -n "$OPEN_SYNC_PR" ]; then
+            echo "Open sync PR #${OPEN_SYNC_PR} exists; commenting instead of opening another."
+            gh pr comment "$OPEN_SYNC_PR" --body \
+              "Upstream has moved to \`${UPSTREAM_SHORT}\` but this sync PR is still open. Merge or close it, then re-run the Upstream Sync workflow to pick up the newer upstream head."
+            echo "action=none" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "action=sync" >> "$GITHUB_OUTPUT"
+
+      - name: Attempt merge
+        id: merge
+        if: steps.check.outputs.action == 'sync'
+        env:
+          UPSTREAM_DEFAULT: ${{ steps.resolve.outputs.upstream_default }}
+          FORK_DEFAULT: ${{ steps.resolve.outputs.fork_default }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BRANCH="upstream-sync/$(date -u +%Y-%m-%d)"
+          git checkout -B "$BRANCH" "origin/${FORK_DEFAULT}"
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+          if git merge --no-edit "upstream/${UPSTREAM_DEFAULT}"; then
+            echo "result=clean" >> "$GITHUB_OUTPUT"
+          else
+            git diff --name-only --diff-filter=U > /tmp/conflicted-files.txt
+            git merge --abort
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push branch and open PR
+        if: steps.merge.outputs.result == 'clean'
+        env:
+          # A PAT (UPSTREAM_SYNC_TOKEN) lets CI run on the opened PR;
+          # GITHUB_TOKEN-created PRs never trigger workflow runs.
+          GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN || secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.merge.outputs.branch }}
+          FORK_DEFAULT: ${{ steps.resolve.outputs.fork_default }}
+          UPSTREAM_SHORT: ${{ steps.resolve.outputs.upstream_short }}
+          UPSTREAM_SHA: ${{ steps.resolve.outputs.upstream_sha }}
+          HAS_SYNC_PAT: ${{ secrets.UPSTREAM_SYNC_TOKEN != '' }}
+        run: |
+          # The branch is workflow-owned: a prior partial run may have left a
+          # stale copy behind, so a lease-guarded force push is safe here.
+          git push --force-with-lease origin "HEAD:${BRANCH}"
+
+          CHANGED_FILES="$(git diff --name-only "origin/${FORK_DEFAULT}...HEAD")"
+
+          # Cross-reference fork touchpoints (file paths or directory prefixes,
+          # matched literally — no regex interpretation of path characters).
+          : > /tmp/touched.md
+          while IFS= read -r tp; do
+            while IFS= read -r f; do
+              case "$f" in
+                "$tp"|"$tp"/*)
+                  echo "- \`${tp}\`" >> /tmp/touched.md
+                  break
+                  ;;
+              esac
+            done <<< "$CHANGED_FILES"
+          done < <(jq -r '.paths[].path' .github/upstream-touchpoints.json)
+
+          {
+            echo "## What Changed"
+            echo
+            echo "Automated merge of upstream T3 Code (\`${UPSTREAM_REPO}\`) at \`${UPSTREAM_SHA}\` into \`${FORK_DEFAULT}\`."
+            echo
+            echo "## Why"
+            echo
+            echo "Keeps the fork's T3 Code foundation current with upstream. Opened by the Upstream Sync workflow; the upstream default branch merged cleanly with no conflicts."
+            echo
+            echo "### Diffstat (tail)"
+            echo
+            echo '```'
+            git diff --stat "origin/${FORK_DEFAULT}...HEAD" | tail -n 20
+            echo '```'
+            echo
+            echo "### Fork touchpoints changed by this merge"
+            echo
+            if [ -s /tmp/touched.md ]; then
+              echo "The following paths from \`.github/upstream-touchpoints.json\` were changed. Review these hunks carefully — they carry the Unlock AI Workbench layer:"
+              echo
+              cat /tmp/touched.md
+            else
+              echo "None of the paths in \`.github/upstream-touchpoints.json\` were changed by this merge."
+            fi
+            echo
+            if [ "$HAS_SYNC_PAT" != "true" ]; then
+              echo "> **CI note:** this PR was opened with the default \`GITHUB_TOKEN\`, so CI does not run automatically. Close and reopen the PR (or push an empty commit) to trigger checks before merging. Configure the \`UPSTREAM_SYNC_TOKEN\` secret to make CI run automatically on future sync PRs."
+              echo
+            fi
+            echo "---"
+            echo "Generated by \`.github/workflows/upstream-sync.yml\`. Upstream merges land through reviewed PRs only — do not push upstream commits directly to \`${FORK_DEFAULT}\`."
+          } > /tmp/pr-body.md
+
+          gh pr create \
+            --base "$FORK_DEFAULT" \
+            --head "$BRANCH" \
+            --title "chore: merge upstream T3 Code ${UPSTREAM_SHORT}" \
+            --body-file /tmp/pr-body.md
+
+      - name: Report merge conflict as issue
+        if: steps.merge.outputs.result == 'conflict'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM_DEFAULT: ${{ steps.resolve.outputs.upstream_default }}
+          FORK_DEFAULT: ${{ steps.resolve.outputs.fork_default }}
+          UPSTREAM_SHORT: ${{ steps.resolve.outputs.upstream_short }}
+          UPSTREAM_SHA: ${{ steps.resolve.outputs.upstream_sha }}
+        run: |
+          gh label create upstream-conflict --color B60205 \
+            --description "Upstream T3 Code merge hit conflicts" 2>/dev/null || true
+
+          {
+            echo "Merging upstream \`${UPSTREAM_REPO}\` head \`${UPSTREAM_SHA}\` into \`${FORK_DEFAULT}\` produced conflicts. The workflow aborted the merge; a manual merge is required."
+            echo
+            echo "### Conflicted files"
+            echo
+            while IFS= read -r f; do
+              [ -z "$f" ] && continue
+              MARK=""
+              while IFS= read -r tp; do
+                case "$f" in
+                  "$tp"|"$tp"/*)
+                    MARK=" **(fork touchpoint)**"
+                    break
+                    ;;
+                esac
+              done < <(jq -r '.paths[].path' .github/upstream-touchpoints.json)
+              echo "- \`${f}\`${MARK}"
+            done < /tmp/conflicted-files.txt
+            echo
+            echo "Files marked **(fork touchpoint)** carry the Unlock AI Workbench layer (see \`.github/upstream-touchpoints.json\`) — resolve those with the fork's behavior in mind."
+            echo
+            echo "### Recommended manual merge"
+            echo
+            echo "See \`docs/operations/upstream-sync.md\`. Summary:"
+            echo
+            echo "1. \`git remote add upstream https://github.com/${UPSTREAM_REPO}.git\` (once) and \`git fetch upstream\`"
+            echo "2. \`git checkout -b upstream-sync/manual-<yyyy-mm-dd> ${FORK_DEFAULT}\`"
+            echo "3. \`git merge upstream/${UPSTREAM_DEFAULT}\`, resolve conflicts file by file"
+            echo "4. Run targeted checks for the packages touched, push the branch, open a PR — never push the merge directly to \`${FORK_DEFAULT}\`"
+          } > /tmp/conflict-issue.md
+
+          EXISTING="$(gh issue list --state open --label upstream-conflict --json number -q '.[0].number')"
+          if [ -n "$EXISTING" ]; then
+            gh issue edit "$EXISTING" \
+              --title "Upstream merge conflict: T3 Code ${UPSTREAM_SHORT}" \
+              --body-file /tmp/conflict-issue.md
+            gh issue comment "$EXISTING" --body "Refreshed by the Upstream Sync workflow for upstream \`${UPSTREAM_SHORT}\`."
+          else
+            gh issue create \
+              --title "Upstream merge conflict: T3 Code ${UPSTREAM_SHORT}" \
+              --label upstream-conflict \
+              --body-file /tmp/conflict-issue.md
+          fi

@@ -115,6 +115,8 @@ export type SkillBlueprintCategory = {
 
 export type SkillBlueprint = {
   readonly id: string;
+  /** The exact skill name the setup prompt creates; defaults to id. */
+  readonly installName?: string;
   readonly title: string;
   readonly category: string;
   readonly categoryNumber: string;
