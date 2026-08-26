@@ -285,6 +285,7 @@ validationLayer("CodexAdapterLive validation", (it) => {
         serviceTier: "priority",
         threadId: asThreadId("thread-1"),
         runtimeMode: "full-access",
+        workbenchSkillsDir: NodePath.join(process.cwd(), "userdata", "skills", "skills"),
       });
     }),
   );

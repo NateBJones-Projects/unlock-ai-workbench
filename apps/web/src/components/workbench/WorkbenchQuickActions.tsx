@@ -15,6 +15,7 @@ import * as Schema from "effect/Schema";
 
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { cn } from "../../lib/utils";
+import { useServerConfigs } from "../../state/entities";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
@@ -59,6 +60,9 @@ export function WorkbenchQuickActions(props: {
   readonly onRunRinger?: (templateId: string) => void | Promise<void>;
 }) {
   const { launchingId, launchPrompt } = useWorkbenchLaunch();
+  const serverConfigs = useServerConfigs();
+  const workbenchSkillsDir =
+    serverConfigs.get(props.projectRef.environmentId)?.workbenchSkillsDir ?? null;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [runningActionId, setRunningActionId] = useState<string | null>(null);
@@ -120,7 +124,7 @@ export function WorkbenchQuickActions(props: {
           action.id,
           action.installed
             ? skillUsePrompt(action.skill.install.name)
-            : verifiedSkillSetupPrompt(action.skill),
+            : verifiedSkillSetupPrompt(action.skill, workbenchSkillsDir),
           {
             projectRef: props.projectRef,
             provenance: {

@@ -25,8 +25,8 @@ const SOURCE_SKILL_CATEGORIES = [
   </task>
 
   <storage>
-    Store the skill wherever this harness loads skills from, such as
-    ~/.claude/skills/image-gateway/SKILL.md or ~/.codex/skills/image-gateway/SKILL.md.
+    Store the skill as image-gateway/SKILL.md in the skills directory named by
+    the installer instructions that accompany this blueprint.
   </storage>
 
   <job>
@@ -202,8 +202,8 @@ artifact and showing me.`,
   </task>
 
   <storage>
-    Store it wherever this harness loads skills from, such as
-    ~/.claude/skills/token-saver/SKILL.md or ~/.codex/skills/token-saver/SKILL.md.
+    Store it as token-saver/SKILL.md in the skills directory named by the
+    installer instructions that accompany this blueprint.
   </storage>
 
   <source>

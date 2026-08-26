@@ -66,6 +66,64 @@ it.layer(NodeServices.layer)("discoverClaudeSkills", (it) => {
     }),
   );
 
+  it.effect("discovers workbench-managed skills, losing to project on name collision", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-claude-skills-" });
+      const configDir = path.join(tempDir, "claude-home");
+      const workspace = path.join(tempDir, "workspace");
+      const workbenchSkillsDir = path.join(tempDir, "workbench-skills");
+
+      // Same name at all three scopes: workbench beats the stale user copy,
+      // project beats workbench.
+      yield* writeSkill(
+        path.join(configDir, "skills"),
+        "citation-guard",
+        ["---", "name: citation-guard", "description: Stale personal copy.", "---"].join("\n"),
+      );
+      yield* writeSkill(
+        workbenchSkillsDir,
+        "citation-guard",
+        ["---", "name: citation-guard", "description: Workbench catalog copy.", "---"].join("\n"),
+      );
+      yield* writeSkill(
+        workbenchSkillsDir,
+        "token-saver",
+        ["---", "name: token-saver", "description: Workbench only.", "---"].join("\n"),
+      );
+      yield* writeSkill(
+        path.join(workspace, ".claude", "skills"),
+        "token-saver",
+        ["---", "name: token-saver", "description: Project override.", "---"].join("\n"),
+      );
+
+      const skills = yield* discoverClaudeSkills(
+        { homePath: configDir },
+        workspace,
+        undefined,
+        workbenchSkillsDir,
+      );
+
+      assert.deepEqual(skills, [
+        {
+          name: "citation-guard",
+          path: path.join(workbenchSkillsDir, "citation-guard", "SKILL.md"),
+          enabled: true,
+          scope: "workbench",
+          description: "Workbench catalog copy.",
+        },
+        {
+          name: "token-saver",
+          path: path.join(workspace, ".claude", "skills", "token-saver", "SKILL.md"),
+          enabled: true,
+          scope: "project",
+          description: "Project override.",
+        },
+      ]);
+    }),
+  );
+
   it.effect("carries Unlock markers from frontmatter and omits them when absent", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

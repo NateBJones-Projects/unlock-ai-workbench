@@ -5,13 +5,13 @@ export const V1_SKILL_PROVIDER_COMPATIBILITY = [
     driver: "codex",
     status: "ready",
     delivery: "skill-file",
-    note: "Install as a native Codex skill.",
+    note: "Installs into the Workbench skills library, loaded natively by Codex.",
   },
   {
     driver: "claudeAgent",
     status: "ready",
     delivery: "skill-file",
-    note: "Install as a native Claude Code skill.",
+    note: "Installs into the Workbench skills library, loaded natively by Claude Code.",
   },
   {
     driver: "opencode",

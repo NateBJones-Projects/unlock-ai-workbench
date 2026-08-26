@@ -4096,6 +4096,11 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         pathToClaudeCodeExecutable: claudeBinaryPath,
         systemPrompt: { type: "preset", preset: "claude_code" },
         settingSources: [...CLAUDE_SETTING_SOURCES],
+        // Workbench-managed skills (catalog installs) ride along as a local
+        // plugin so they load in every session without touching the user's
+        // own config dir. The SDK skips the plugin silently if the directory
+        // is missing or empty.
+        plugins: [{ type: "local", path: serverConfig.workbenchSkillsPluginDir }],
         // `ultracode` is a Claude Code setting, not an API effort level. It is
         // normalized to `xhigh` above and paired with `settings.ultracode`.
         ...(effectiveEffort

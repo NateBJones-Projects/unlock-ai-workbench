@@ -57,7 +57,10 @@ catalog.
   notices, a package-compiled trusted digest, runtime execution verification, nonce-bound HUD
   identity, and desktop packaging/update boundaries.
 - Native skill setup prompts that preserve the exact generated `SKILL.md` and require the agent to
-  validate and report its install path.
+  validate and report its install path. Installs land in the workbench-managed skills directory
+  (`<state dir>/skills/skills`), which the server loads into Claude Code sessions as a local plugin
+  and registers with Codex through `skills/extraRoots/set` — never in the user's personal
+  `~/.claude` or `~/.codex`.
 - Transparent attribution in the product UI and retained upstream license.
 
 ## Deliberate v1 limits

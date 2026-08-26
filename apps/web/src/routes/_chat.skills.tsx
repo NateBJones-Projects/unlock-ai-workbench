@@ -71,6 +71,9 @@ function SkillsRouteView() {
     null;
   const activeProvider = resolveWorkbenchProvider(providers, preferredProviderInstanceId);
   const detectedSkills = detectedWorkbenchSkills(activeProvider);
+  const workbenchSkillsDir = providerEnvironmentId
+    ? (serverConfigs.get(providerEnvironmentId)?.workbenchSkillsDir ?? null)
+    : null;
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const visibleSkills = useMemo(() => {
@@ -142,8 +145,8 @@ function SkillsRouteView() {
                   : null;
                 const actionId = `skill:${skill.id}`;
                 const setupPrompt = manifest
-                  ? verifiedSkillSetupPrompt(manifest)
-                  : blueprintSkillSetupPrompt(skill);
+                  ? verifiedSkillSetupPrompt(manifest, workbenchSkillsDir)
+                  : blueprintSkillSetupPrompt(skill, workbenchSkillsDir);
 
                 return (
                   <article key={skill.id} className="py-5">

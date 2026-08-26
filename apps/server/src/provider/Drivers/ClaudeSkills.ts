@@ -20,7 +20,7 @@ import { parse as parseYamlDocument } from "yaml";
 
 import { expandHomePath } from "../../pathExpansion.ts";
 
-type ClaudeSkillScope = "user" | "project";
+type ClaudeSkillScope = "user" | "workbench" | "project";
 
 const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 
@@ -144,6 +144,7 @@ export const discoverClaudeSkills = Effect.fn("discoverClaudeSkills")(function* 
   config: Pick<ClaudeSettings, "homePath">,
   cwd?: string,
   environment?: NodeJS.ProcessEnv,
+  workbenchSkillsDir?: string,
 ): Effect.fn.Return<ReadonlyArray<ServerProviderSkill>, never, FileSystem.FileSystem | Path.Path> {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -151,6 +152,10 @@ export const discoverClaudeSkills = Effect.fn("discoverClaudeSkills")(function* 
 
   const roots: ReadonlyArray<{ directory: string; scope: ClaudeSkillScope }> = [
     { directory: path.join(configDirPath, "skills"), scope: "user" },
+    // Workbench-managed catalog installs (loaded into sessions as a local
+    // plugin) beat a stale personal copy of the same skill but still yield to
+    // a project-scoped one, matching most-specific-wins.
+    ...(workbenchSkillsDir ? [{ directory: workbenchSkillsDir, scope: "workbench" as const }] : []),
     ...(cwd ? [{ directory: path.join(cwd, ".claude", "skills"), scope: "project" as const }] : []),
   ];
 

@@ -183,7 +183,13 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
       // `makeManagedServerProvider.checkProvider`'s `R = never`.
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const checkProvider = checkCodexProviderStatus(effectiveConfig, undefined, processEnv).pipe(
+      const { workbenchSkillsDir } = yield* ServerConfig;
+      const checkProvider = checkCodexProviderStatus(
+        effectiveConfig,
+        undefined,
+        processEnv,
+        workbenchSkillsDir,
+      ).pipe(
         Effect.flatMap(annotateSkillsWithUnlockMarkers),
         Effect.map(stampIdentity),
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),

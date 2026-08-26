@@ -35,7 +35,7 @@ import * as CodexErrors from "effect-codex-app-server/errors";
 import * as CodexRpc from "effect-codex-app-server/rpc";
 import * as EffectCodexSchema from "effect-codex-app-server/schema";
 
-import { buildCodexInitializeParams } from "./CodexProvider.ts";
+import { buildCodexInitializeParams, registerWorkbenchSkillsRoot } from "./CodexProvider.ts";
 import { codexSessionAppServerArgs } from "./codexLaunchArgs.ts";
 import { expandHomePath } from "../../pathExpansion.ts";
 import { buildCodexDeveloperInstructions } from "../CodexDeveloperInstructions.ts";
@@ -106,6 +106,8 @@ export interface CodexSessionRuntimeOptions {
   readonly serviceTier?: CodexServiceTier | undefined;
   readonly resumeCursor?: CodexResumeCursor;
   readonly appServerArgs?: ReadonlyArray<string>;
+  /** Workbench-managed skills root registered via `skills/extraRoots/set`. */
+  readonly workbenchSkillsDir?: string;
 }
 
 export interface CodexSessionRuntimeSendTurnInput {
@@ -1685,6 +1687,10 @@ export const makeCodexSessionRuntime = (
       yield* emitSessionEvent("session/connecting", "Starting Codex App Server session.");
       yield* client.request("initialize", buildCodexInitializeParams());
       yield* client.notify("initialized", undefined);
+
+      if (options.workbenchSkillsDir) {
+        yield* registerWorkbenchSkillsRoot(client, options.workbenchSkillsDir);
+      }
 
       const requestedModel = normalizeCodexModelSlug(options.model);
 
