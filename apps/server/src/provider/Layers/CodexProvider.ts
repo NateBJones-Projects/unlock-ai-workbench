@@ -315,13 +315,14 @@ export const registerWorkbenchSkillsRoot = (
   client: CodexClient.CodexAppServerClient["Service"],
   workbenchSkillsDir: string,
 ) =>
-  client
-    .request("skills/extraRoots/set", { extraRoots: [workbenchSkillsDir] })
-    .pipe(
-      Effect.catchCause((cause) =>
-        Effect.logWarning("Codex app-server rejected the workbench skills root.", { cause }),
-      ),
-    );
+  client.request("skills/extraRoots/set", { extraRoots: [workbenchSkillsDir] }).pipe(
+    // Typed errors only: an unknown-method rejection from an older app-server
+    // is survivable, but interrupts and defects must propagate so timeouts
+    // and session teardown are not silently absorbed here.
+    Effect.catch((error) =>
+      Effect.logWarning("Codex app-server rejected the workbench skills root.", { error }),
+    ),
+  );
 
 export function buildCodexInitializeParams(): CodexSchema.V1InitializeParams {
   return {

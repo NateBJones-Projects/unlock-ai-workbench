@@ -58,9 +58,9 @@ catalog.
   identity, and desktop packaging/update boundaries.
 - Native skill setup prompts that preserve the exact generated `SKILL.md` and require the agent to
   validate and report its install path. Installs land in the workbench-managed skills directory
-  (`<state dir>/skills/skills`), which the server loads into Claude Code sessions as a local plugin
-  and registers with Codex through `skills/extraRoots/set` — never in the user's personal
-  `~/.claude` or `~/.codex`.
+  (`<state dir>/skills/skills`), never in the user's personal `~/.claude` or `~/.codex`. Codex
+  registers that directory through `skills/extraRoots/set`; Claude Code loads its parent
+  (`<state dir>/skills`, which carries `.claude-plugin/plugin.json`) as a local plugin.
 - Transparent attribution in the product UI and retained upstream license.
 
 ## Deliberate v1 limits

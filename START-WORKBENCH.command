@@ -33,7 +33,7 @@ fi
 
 if ! workbench_node_ok "$(command -v node)"; then
   echo "Unlock AI Workbench needs Node.js 24.13.1 or newer; this machine has Node $(node --version)."
-  echo "Update it with:  brew install node  (or, if you use nvm:  nvm install 24 && nvm alias default 24)"
+  echo "Update it with:  brew install node  (or:  brew upgrade node — nvm users:  nvm install 24 && nvm alias default 24)"
   echo "Or download the installer from https://nodejs.org — then run this launcher again."
   read -r "?Press Return to close."
   exit 1

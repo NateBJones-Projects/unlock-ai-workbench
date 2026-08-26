@@ -17,7 +17,7 @@ function installLocationInstruction(
   workbenchSkillsDir: string | null | undefined,
 ): string {
   if (workbenchSkillsDir) {
-    return `Install it INSIDE the Unlock AI Workbench's managed skills directory: write the skill to "${workbenchSkillsDir}/${installName}/SKILL.md". Do NOT install into the provider's personal config (such as ~/.claude/skills or ~/.codex/skills) — the Workbench owns its skills and loads that managed directory into every session automatically.`;
+    return `Install it INSIDE the Unlock AI Workbench's managed skills directory: write the skill to "${workbenchSkillsDir}/${installName}/SKILL.md". Do NOT install into the provider's personal config (such as ~/.claude/skills or ~/.codex/skills) — the Workbench owns its skills and loads that managed directory into every new session.`;
   }
   return `Install it at user scope using the provider's native skill directory.`;
 }
@@ -45,7 +45,7 @@ export function blueprintSkillSetupPrompt(
 
 This is a library blueprint, not a pre-verified pack. First identify this provider's native skill format and interview me for every missing preference or input. Never ask me to paste a secret into chat; propose an environment variable or secure provider-native store instead. Stop after the interview and wait for my answers before writing files.
 
-When I answer, name the skill exactly "${blueprintInstallName(skill)}". ${installLocationInstruction(blueprintInstallName(skill), workbenchSkillsDir)} Validate the finished skill and report its exact path. In the finished skill's frontmatter set "x-unlock-pack: ${skill.id}@blueprint" and "x-unlock-personalized: <today's date as YYYY-MM-DD>" — my interview answers are what earn the personalized marker. Do not install software, call a paid API, publish, send, mutate an account, or transmit private material without a separate explicit approval. Any test must use a safe fixture unless I approve the real input and cost.
+When I answer, name the skill exactly "${blueprintInstallName(skill)}". ${installLocationInstruction(blueprintInstallName(skill), workbenchSkillsDir)} The install location is the quoted path above, not the provider's personal layout. Validate the finished skill, report its exact path, and tell me to start a new thread to use it — fresh sessions load newly installed skills, and this session cannot. In the finished skill's frontmatter set "x-unlock-pack: ${skill.id}@blueprint" and "x-unlock-personalized: <today's date as YYYY-MM-DD>" — my interview answers are what earn the personalized marker. Do not install software, call a paid API, publish, send, mutate an account, or transmit private material without a separate explicit approval. Any test must use a safe fixture unless I approve the real input and cost.
 
 <unlock_ai_blueprint id="${skill.id}">
 ${skill.setupPrompt}

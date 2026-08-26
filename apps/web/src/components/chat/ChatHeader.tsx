@@ -27,6 +27,7 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useT3ProjectFileScripts } from "~/hooks/useT3ProjectFileScripts";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { cn } from "~/lib/utils";
+import { markRingerRunSurfaced } from "../workbench/RingsideRunWatcher";
 import { WorkbenchQuickActions } from "../workbench/WorkbenchQuickActions";
 import { recordWorkbenchLaunch } from "../workbench/workbenchLaunchStore";
 import { useAtomCommand } from "~/state/use-atom-command";
@@ -139,14 +140,8 @@ export const ChatHeader = memo(function ChatHeader({
       // Open Ringside before awaiting the launch: the RPC can already be in
       // flight server-side when the client fiber is interrupted (reconnects,
       // registry teardown), and a run with no panel open produces no UI
-      // signal at all. The panel is also where a failed launch surfaces.
-      recordWorkbenchLaunch(threadRef, {
-        kind: "ringer",
-        catalogId: templateId,
-        title: "Ringer Readiness Check",
-        version: "1",
-        strategy: "ringer",
-      });
+      // signal at all. Provenance waits for success so a rejected launch
+      // leaves no durable "Ringer Readiness Check" chip behind.
       useRightPanelStore.getState().open(threadRef, "agents");
       const result = await launchRinger({
         environmentId: activeThreadEnvironmentId,
@@ -157,6 +152,17 @@ export const ChatHeader = memo(function ChatHeader({
         const error = squashAtomCommandFailure(result);
         throw error instanceof Error ? error : new Error("Ringer did not start.");
       }
+      // This launch already opened the panel — claim the run so the watcher
+      // cannot reopen Ringside if the user closes it before the run's first
+      // stream event arrives.
+      markRingerRunSurfaced(result.value.runId);
+      recordWorkbenchLaunch(threadRef, {
+        kind: "ringer",
+        catalogId: templateId,
+        title: "Ringer Readiness Check",
+        version: "1",
+        strategy: "ringer",
+      });
     },
     [activeThreadEnvironmentId, activeThreadId, launchRinger, threadRef],
   );
