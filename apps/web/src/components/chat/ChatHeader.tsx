@@ -136,6 +136,18 @@ export const ChatHeader = memo(function ChatHeader({
       if (templateId !== RINGER_WORKBENCH_DIAGNOSTIC_TEMPLATE_ID) {
         throw new Error("This Ringer template is not approved for Workbench Quick Actions.");
       }
+      // Open Ringside before awaiting the launch: the RPC can already be in
+      // flight server-side when the client fiber is interrupted (reconnects,
+      // registry teardown), and a run with no panel open produces no UI
+      // signal at all. The panel is also where a failed launch surfaces.
+      recordWorkbenchLaunch(threadRef, {
+        kind: "ringer",
+        catalogId: templateId,
+        title: "Ringer Readiness Check",
+        version: "1",
+        strategy: "ringer",
+      });
+      useRightPanelStore.getState().open(threadRef, "agents");
       const result = await launchRinger({
         environmentId: activeThreadEnvironmentId,
         input: { threadId: activeThreadId, templateId: templateId as RingerTemplateId },
@@ -145,14 +157,6 @@ export const ChatHeader = memo(function ChatHeader({
         const error = squashAtomCommandFailure(result);
         throw error instanceof Error ? error : new Error("Ringer did not start.");
       }
-      recordWorkbenchLaunch(threadRef, {
-        kind: "ringer",
-        catalogId: templateId,
-        title: "Ringer Readiness Check",
-        version: "1",
-        strategy: "ringer",
-      });
-      useRightPanelStore.getState().open(threadRef, "agents");
     },
     [activeThreadEnvironmentId, activeThreadId, launchRinger, threadRef],
   );

@@ -144,6 +144,7 @@ import {
   usePreviewMiniPlayerStore,
 } from "../previewMiniPlayerStore";
 import { RightPanelTabs } from "./RightPanelTabs";
+import { RingsideRunWatcher } from "./workbench/RingsideRunWatcher";
 import { WorkbenchRingsidePanel } from "./workbench/WorkbenchRingsidePanel";
 import { recordWorkbenchLaunch } from "./workbench/workbenchLaunchStore";
 import {
@@ -5949,6 +5950,7 @@ function ChatViewContent(props: ChatViewProps) {
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
+      {activeThreadRef ? <RingsideRunWatcher threadRef={activeThreadRef} /> : null}
       {rightPanelOpen && !shouldUseRightPanelSheet ? panelLayoutControls : null}
       <div
         className={cn(
