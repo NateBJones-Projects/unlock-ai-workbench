@@ -36,6 +36,29 @@ Runs daily and on manual dispatch. It fetches upstream without merging and diffs
 
 Do not close or hand-edit the cursor issue. If upstream rewrites history and orphans the cursor sha, the workflow resets the cursor to the current head automatically.
 
+## Testing the maintenance workflows
+
+Status: tested.
+
+Both workflows add `pingdotgg/t3code` as the local `upstream` Git remote. Keep
+`GH_REPO: ${{ github.repository }}` at workflow scope so implicit `gh pr`,
+`gh issue`, and `gh label` commands continue to target this fork. Label creation
+uses `--force`; do not hide its errors, because a repository-targeting or token
+failure must stop the run clearly.
+
+Safe verification:
+
+1. Run `node --test .github/scripts/upstream-workflow-contract.test.cjs`.
+2. In a temporary Git repository, add this repository as `origin` and
+   `pingdotgg/t3code` as `upstream`.
+3. Confirm `GH_REPO=NateBJones-Projects/unlock-ai-workbench gh repo view --json nameWithOwner -q .nameWithOwner`
+   prints `NateBJones-Projects/unlock-ai-workbench`.
+
+After merge, manually dispatch **Upstream Watch** and confirm it creates or
+updates issues only in this repository. Dispatching **Upstream Sync** is not a
+read-only smoke test: it can push a branch, open a pull request, or update a
+conflict issue. No local cleanup is required.
+
 ## Adding the upstream remote locally
 
 The docs used to claim an `upstream` remote is configured; it is not by default. Add it once per clone:
