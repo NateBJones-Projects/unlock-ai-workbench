@@ -306,21 +306,29 @@ const requestAllCodexModels = Effect.fn("requestAllCodexModels")(function* (
   return models;
 });
 
+const isCodexAppServerRequestError = Schema.is(CodexErrors.CodexAppServerRequestError);
+
+/** Older Codex app-servers reject `skills/extraRoots/set` with JSON-RPC -32601. */
+export function isUnknownSkillsExtraRootsMethod(error: CodexErrors.CodexAppServerError): boolean {
+  return isCodexAppServerRequestError(error) && error.code === -32601;
+}
+
 /**
  * Register the workbench-managed skills root so the app-server lists and
- * loads catalog installs alongside native skills. Best-effort: an app-server
- * too old to know the method must not fail the caller.
+ * loads catalog installs alongside native skills. Best-effort only for
+ * unknown-method: an app-server too old to know `skills/extraRoots/set`
+ * must not fail the caller. Any other typed failure (bad path, transport,
+ * process exit) propagates so session setup does not silently skip skills.
  */
 export const registerWorkbenchSkillsRoot = (
   client: CodexClient.CodexAppServerClient["Service"],
   workbenchSkillsDir: string,
 ) =>
   client.request("skills/extraRoots/set", { extraRoots: [workbenchSkillsDir] }).pipe(
-    // Typed errors only: an unknown-method rejection from an older app-server
-    // is survivable, but interrupts and defects must propagate so timeouts
-    // and session teardown are not silently absorbed here.
-    Effect.catch((error) =>
-      Effect.logWarning("Codex app-server rejected the workbench skills root.", { error }),
+    Effect.catchIf(isUnknownSkillsExtraRootsMethod, (error) =>
+      Effect.logWarning("Codex app-server does not support workbench skills roots.", {
+        error,
+      }),
     ),
   );
 

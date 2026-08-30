@@ -29,11 +29,13 @@ import {
 } from "../components/workbench/workbenchProvider";
 import {
   blueprintSkillSetupPrompt,
+  resolveWorkbenchSkillsInstallTarget,
   skillUsePrompt,
   verifiedSkillSetupPrompt,
 } from "../components/workbench/workbenchPrompts";
 import { useWorkbenchLaunch } from "../components/workbench/useWorkbenchLaunch";
 import { useProjects, useServerConfigs } from "../state/entities";
+import { stackedThreadToast, toastManager } from "../components/ui/toast";
 
 const MANIFEST_BY_ID = new Map<string, SkillManifest>(SKILLS.map((skill) => [skill.id, skill]));
 
@@ -71,9 +73,9 @@ function SkillsRouteView() {
     null;
   const activeProvider = resolveWorkbenchProvider(providers, preferredProviderInstanceId);
   const detectedSkills = detectedWorkbenchSkills(activeProvider);
-  const workbenchSkillsDir = providerEnvironmentId
-    ? (serverConfigs.get(providerEnvironmentId)?.workbenchSkillsDir ?? null)
-    : null;
+  const serverConfig = providerEnvironmentId ? serverConfigs.get(providerEnvironmentId) : undefined;
+  const installTarget = resolveWorkbenchSkillsInstallTarget(serverConfig);
+  const skillSetupReady = installTarget.kind !== "pending";
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const visibleSkills = useMemo(() => {
@@ -144,9 +146,12 @@ function SkillsRouteView() {
                   ? formatPersonalizedLabel(installedMeta.personalizedAt)
                   : null;
                 const actionId = `skill:${skill.id}`;
-                const setupPrompt = manifest
-                  ? verifiedSkillSetupPrompt(manifest, workbenchSkillsDir)
-                  : blueprintSkillSetupPrompt(skill, workbenchSkillsDir);
+                const setupPrompt =
+                  installTarget.kind === "pending"
+                    ? null
+                    : manifest
+                      ? verifiedSkillSetupPrompt(manifest, installTarget)
+                      : blueprintSkillSetupPrompt(skill, installTarget);
 
                 return (
                   <article key={skill.id} className="py-5">
@@ -207,8 +212,24 @@ function SkillsRouteView() {
                           <Button
                             size="sm"
                             variant={manifest ? "default" : "outline"}
-                            disabled={launchingId !== null}
-                            onClick={() =>
+                            disabled={launchingId !== null || !skillSetupReady}
+                            title={
+                              skillSetupReady
+                                ? undefined
+                                : "Waiting for the environment to finish loading before installing skills."
+                            }
+                            onClick={() => {
+                              if (setupPrompt == null) {
+                                toastManager.add(
+                                  stackedThreadToast({
+                                    type: "info",
+                                    title: "Environment still loading",
+                                    description:
+                                      "Wait for the workbench to finish connecting, then try skill setup again.",
+                                  }),
+                                );
+                                return;
+                              }
                               void launchPrompt(actionId, setupPrompt, {
                                 provenance: {
                                   kind: "skill",
@@ -217,15 +238,17 @@ function SkillsRouteView() {
                                   version: manifest?.version ?? null,
                                   strategy: "prepared-prompt",
                                 },
-                              })
-                            }
+                              });
+                            }}
                           >
                             <DownloadIcon />
                             {launchingId === actionId
                               ? "Opening…"
-                              : manifest
-                                ? "Set up pack"
-                                : "Adapt blueprint"}
+                              : !skillSetupReady
+                                ? "Waiting…"
+                                : manifest
+                                  ? "Set up pack"
+                                  : "Adapt blueprint"}
                           </Button>
                         )}
                       </div>

@@ -45,6 +45,9 @@ export function formatProviderSkillInstallSource(
   if (normalizedScope === "user" || normalizedScope === "personal") {
     return "Personal";
   }
+  if (normalizedScope === "workbench") {
+    return "Workbench";
+  }
   if (normalizedScope) {
     return titleCaseWords(normalizedScope);
   }
