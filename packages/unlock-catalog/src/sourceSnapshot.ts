@@ -1,8 +1,8 @@
 export const UNLOCK_SOURCE_SNAPSHOT = {
-  capturedAt: "2026-08-07",
-  openSkillsSha256: "359629a4a947364c8885dc124f5dfa7bb415b162b83c5c0d627078ea068917b9",
-  guidesSha256: "feb1c6560eb0634a863094108195070c45a4c028714a96083674e537d44fd284",
-  skillCount: 41,
+  capturedAt: "2026-08-26",
+  openSkillsSha256: "e89f0d9c3e1f1c9f57bb5981eaf462b136ff271b083949c2e6f3127ecd97c618",
+  guidesSha256: "1255ce220430e4c17db98a0d0841c613c35c2f7bf04c8a20d5c77e51f271df8e",
+  skillCount: 42,
   runbookCount: 10,
   publishedGuideCount: 20,
 } as const;
