@@ -15,6 +15,7 @@ import * as Schema from "effect/Schema";
 
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { cn } from "../../lib/utils";
+import { useServerConfigs } from "../../state/entities";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
@@ -26,7 +27,11 @@ import {
   type WorkbenchQuickAction,
   type WorkbenchRingerQuickActionCapability,
 } from "./quickActions";
-import { skillUsePrompt, verifiedSkillSetupPrompt } from "./workbenchPrompts";
+import {
+  skillUsePrompt,
+  resolveWorkbenchSkillsInstallTarget,
+  verifiedSkillSetupPrompt,
+} from "./workbenchPrompts";
 import { useWorkbenchLaunch } from "./useWorkbenchLaunch";
 
 const FAVORITES_STORAGE_KEY = "unlock-ai:quick-action-favorites:v1";
@@ -59,6 +64,10 @@ export function WorkbenchQuickActions(props: {
   readonly onRunRinger?: (templateId: string) => void | Promise<void>;
 }) {
   const { launchingId, launchPrompt } = useWorkbenchLaunch();
+  const serverConfigs = useServerConfigs();
+  const installTarget = resolveWorkbenchSkillsInstallTarget(
+    serverConfigs.get(props.projectRef.environmentId),
+  );
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [runningActionId, setRunningActionId] = useState<string | null>(null);
@@ -116,23 +125,41 @@ export function WorkbenchQuickActions(props: {
           openRingside: true,
         });
       } else if (action.kind === "skill") {
-        await launchPrompt(
-          action.id,
-          action.installed
-            ? skillUsePrompt(action.skill.install.name)
-            : verifiedSkillSetupPrompt(action.skill),
-          {
+        if (action.installed) {
+          await launchPrompt(action.id, skillUsePrompt(action.skill.install.name), {
             projectRef: props.projectRef,
             provenance: {
               kind: "skill",
               catalogId: action.skill.id,
               title: action.skill.title,
               version: action.skill.version,
-              strategy: action.installed ? "native-skill" : "prepared-prompt",
+              strategy: "native-skill",
             },
             openRingside: true,
-          },
-        );
+          });
+        } else if (installTarget.kind === "pending") {
+          toastManager.add(
+            stackedThreadToast({
+              type: "info",
+              title: "Environment still loading",
+              description:
+                "Wait for the workbench to finish connecting, then try skill setup again.",
+            }),
+          );
+          return;
+        } else {
+          await launchPrompt(action.id, verifiedSkillSetupPrompt(action.skill, installTarget), {
+            projectRef: props.projectRef,
+            provenance: {
+              kind: "skill",
+              catalogId: action.skill.id,
+              title: action.skill.title,
+              version: action.skill.version,
+              strategy: "prepared-prompt",
+            },
+            openRingside: true,
+          });
+        }
       } else if (action.kind === "shell") {
         await props.onRunScript(action.script);
       } else if (props.onRunRinger) {

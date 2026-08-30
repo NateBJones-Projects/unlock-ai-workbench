@@ -53,5 +53,11 @@ describe("formatProviderSkillInstallSource", () => {
         scope: "project",
       }),
     ).toBe("Project");
+    expect(
+      formatProviderSkillInstallSource({
+        path: "/tmp/workbench/userdata/skills/skills/citation-guard/SKILL.md",
+        scope: "workbench",
+      }),
+    ).toBe("Workbench");
   });
 });

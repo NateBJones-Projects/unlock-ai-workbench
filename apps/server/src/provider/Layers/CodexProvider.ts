@@ -306,6 +306,32 @@ const requestAllCodexModels = Effect.fn("requestAllCodexModels")(function* (
   return models;
 });
 
+const isCodexAppServerRequestError = Schema.is(CodexErrors.CodexAppServerRequestError);
+
+/** Older Codex app-servers reject `skills/extraRoots/set` with JSON-RPC -32601. */
+export function isUnknownSkillsExtraRootsMethod(error: CodexErrors.CodexAppServerError): boolean {
+  return isCodexAppServerRequestError(error) && error.code === -32601;
+}
+
+/**
+ * Register the workbench-managed skills root so the app-server lists and
+ * loads catalog installs alongside native skills. Best-effort only for
+ * unknown-method: an app-server too old to know `skills/extraRoots/set`
+ * must not fail the caller. Any other typed failure (bad path, transport,
+ * process exit) propagates so session setup does not silently skip skills.
+ */
+export const registerWorkbenchSkillsRoot = (
+  client: CodexClient.CodexAppServerClient["Service"],
+  workbenchSkillsDir: string,
+) =>
+  client.request("skills/extraRoots/set", { extraRoots: [workbenchSkillsDir] }).pipe(
+    Effect.catchIf(isUnknownSkillsExtraRootsMethod, (error) =>
+      Effect.logWarning("Codex app-server does not support workbench skills roots.", {
+        error,
+      }),
+    ),
+  );
+
 export function buildCodexInitializeParams(): CodexSchema.V1InitializeParams {
   return {
     clientInfo: {
@@ -326,6 +352,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
   readonly cwd: string;
   readonly customModels?: ReadonlyArray<string>;
   readonly environment?: NodeJS.ProcessEnv;
+  readonly workbenchSkillsDir?: string;
 }) {
   // `~` is not shell-expanded when env vars are set via `child_process.spawn`,
   // so `CODEX_HOME=~/.codex_work` would reach codex verbatim and trip
@@ -380,6 +407,10 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
     },
   });
   yield* client.notify("initialized", undefined);
+
+  if (input.workbenchSkillsDir) {
+    yield* registerWorkbenchSkillsRoot(client, input.workbenchSkillsDir);
+  }
 
   // Extract the version string after the first '/' in userAgent, up to the next space or the end
   const versionMatch = initialize.userAgent.match(/\/([^\s]+)/);
@@ -509,12 +540,14 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     readonly cwd: string;
     readonly customModels: ReadonlyArray<string>;
     readonly environment?: NodeJS.ProcessEnv;
+    readonly workbenchSkillsDir?: string;
   }) => Effect.Effect<
     CodexAppServerProviderSnapshot,
     CodexErrors.CodexAppServerError,
     ChildProcessSpawner.ChildProcessSpawner | Scope.Scope
   > = probeCodexAppServerProvider,
   environment?: NodeJS.ProcessEnv,
+  workbenchSkillsDir?: string,
 ): Effect.fn.Return<
   ServerProviderDraft,
   ServerSettingsError,
@@ -548,6 +581,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     cwd: process.cwd(),
     customModels: codexSettings.customModels,
     environment: resolvedEnvironment,
+    ...(workbenchSkillsDir ? { workbenchSkillsDir } : {}),
   }).pipe(
     Effect.scoped,
     Effect.timeoutOption(Duration.millis(AUTH_PROBE_TIMEOUT_MS)),

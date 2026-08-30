@@ -4,6 +4,25 @@ set -e
 
 cd "${0:A:h}"
 
+workbench_node_ok() {
+  "$1" -e 'const [a,b,c]=process.versions.node.split(".").map(Number);process.exit(a>24||(a===24&&(b>13||(b===13&&c>=1)))?0:1)' >/dev/null 2>&1
+}
+
+# A version manager (nvm, volta, etc.) can leave an old Node first on PATH even
+# when a new-enough one is installed elsewhere — check known install locations
+# before failing.
+if ! command -v node >/dev/null 2>&1 || ! workbench_node_ok "$(command -v node)"; then
+  for workbench_node_candidate in \
+    /opt/homebrew/opt/node/bin/node \
+    /usr/local/opt/node/bin/node \
+    "$HOME"/.nvm/versions/node/*/bin/node(NnOn); do
+    if [[ -x "$workbench_node_candidate" ]] && workbench_node_ok "$workbench_node_candidate"; then
+      export PATH="${workbench_node_candidate:h}:$PATH"
+      break
+    fi
+  done
+fi
+
 if ! command -v node >/dev/null 2>&1; then
   echo "Unlock AI Workbench needs Node.js 24.13 or newer, and Node was not found."
   echo "Install it with:  brew install node"
@@ -12,9 +31,9 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! node -e 'const [a,b,c]=process.versions.node.split(".").map(Number);process.exit(a>24||(a===24&&(b>13||(b===13&&c>=1)))?0:1)' >/dev/null 2>&1; then
+if ! workbench_node_ok "$(command -v node)"; then
   echo "Unlock AI Workbench needs Node.js 24.13.1 or newer; this machine has Node $(node --version)."
-  echo "Update it with:  brew upgrade node"
+  echo "Update it with:  brew install node  (or:  brew upgrade node — nvm users:  nvm install 24 && nvm alias default 24)"
   echo "Or download the installer from https://nodejs.org — then run this launcher again."
   read -r "?Press Return to close."
   exit 1

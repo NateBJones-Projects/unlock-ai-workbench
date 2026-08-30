@@ -15,6 +15,9 @@ build/
 release/
 release-mock/
 .t3
+# Server state written by ServerConfig.layerTest runs that use the package
+# dir as baseDir (e.g. the workbench skills plugin manifest).
+apps/server/userdata/
 .idea/
 apps/web/.playwright
 apps/web/playwright-report

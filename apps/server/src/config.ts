@@ -43,6 +43,16 @@ export interface ServerDerivedPaths {
   readonly environmentIdPath: string;
   readonly serverRuntimeStatePath: string;
   readonly secretsDir: string;
+  /**
+   * Root of the workbench-managed skills plugin. Skill packs installed from
+   * the Unlock catalog live here — inside the workbench's own state, never in
+   * the user's personal `~/.claude` / `~/.codex` — and are loaded additively
+   * into every provider session (Claude via a local plugin, Codex via
+   * `skills/extraRoots/set`).
+   */
+  readonly workbenchSkillsPluginDir: string;
+  /** Skill folders (`<name>/SKILL.md`) inside the workbench skills plugin. */
+  readonly workbenchSkillsDir: string;
 }
 
 export interface DeriveServerPathsOptions {
@@ -107,6 +117,11 @@ export const deriveServerPaths = Effect.fn(function* (
     devUrl !== undefined && !options.baseDirIsExplicit ? "dev" : "userdata",
   );
   const dbPath = join(stateDir, "state.sqlite");
+  // `skills/skills` keeps the plugin root (which carries `.claude-plugin/`)
+  // separate from the skill folders themselves, matching the layout the
+  // Claude plugin loader expects while giving Codex a plain skills root.
+  const workbenchSkillsPluginDir = join(stateDir, "skills");
+  const workbenchSkillsDir = join(workbenchSkillsPluginDir, "skills");
   const attachmentsDir = join(stateDir, "attachments");
   const logsDir = join(stateDir, "logs");
   const providerLogsDir = join(logsDir, "provider");
@@ -129,6 +144,8 @@ export const deriveServerPaths = Effect.fn(function* (
     environmentIdPath: join(stateDir, "environment-id"),
     serverRuntimeStatePath: join(stateDir, "server-runtime.json"),
     secretsDir: join(stateDir, "secrets"),
+    workbenchSkillsPluginDir,
+    workbenchSkillsDir,
   };
 });
 
@@ -149,8 +166,23 @@ export const ensureServerDirectories = Effect.fn(function* (derivedPaths: Server
       fs.makeDirectory(derivedPaths.providerStatusCacheDir, { recursive: true }),
       fs.makeDirectory(path.dirname(derivedPaths.anonymousIdPath), { recursive: true }),
       fs.makeDirectory(path.dirname(derivedPaths.serverRuntimeStatePath), { recursive: true }),
+      fs.makeDirectory(derivedPaths.workbenchSkillsDir, { recursive: true }),
     ],
     { concurrency: "unbounded" },
+  );
+
+  // The workbench skills root doubles as a Claude Code plugin so spawned
+  // sessions load its skills without touching the user's own config dir. The
+  // manifest is tiny and stable; rewrite it every boot so upgrades heal it.
+  const pluginManifestDir = path.join(derivedPaths.workbenchSkillsPluginDir, ".claude-plugin");
+  yield* fs.makeDirectory(pluginManifestDir, { recursive: true });
+  yield* fs.writeFileString(
+    path.join(pluginManifestDir, "plugin.json"),
+    `{
+  "name": "workbench",
+  "description": "Skills installed from the Unlock AI Workbench catalog."
+}
+`,
   );
 });
 

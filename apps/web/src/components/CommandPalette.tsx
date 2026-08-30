@@ -36,6 +36,7 @@ import {
   FolderPlusIcon,
   LinkIcon,
   MessageSquareIcon,
+  RadioTowerIcon,
   SettingsIcon,
   SquarePenIcon,
   TextSearchIcon,
@@ -1427,6 +1428,22 @@ function OpenCommandPaletteDialog(props: {
       openOverlayMode("content");
     },
   });
+
+  // Ringside is otherwise only reachable from inside an already-open right
+  // panel, so give it a first-class entry whenever a thread is active.
+  if (activeThread) {
+    const ringsideThreadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
+    actionItems.push({
+      kind: "action",
+      value: "action:open-ringside",
+      searchTerms: ["ringside", "ringer", "agents", "agent runs", "monitor", "swarm"],
+      title: "Open Ringside",
+      icon: <RadioTowerIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        useRightPanelStore.getState().open(ringsideThreadRef, "agents");
+      },
+    });
+  }
 
   actionItems.push({
     kind: "action",

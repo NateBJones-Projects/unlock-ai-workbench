@@ -435,6 +435,13 @@ export const ServerConfig = Schema.Struct({
   availableEditors: ForwardCompatibleArray(EditorId),
   observability: ServerObservability,
   settings: ServerSettings,
+  /**
+   * Absolute path of the workbench-managed skills directory. Catalog skill
+   * installs are written here (one `<name>/SKILL.md` folder per skill) and
+   * loaded into every provider session, instead of into the user's personal
+   * `~/.claude` / `~/.codex`. Absent on servers that predate managed skills.
+   */
+  workbenchSkillsDir: Schema.optionalKey(TrimmedNonEmptyString),
   /** Whether shell subscriptions can emit an opt-in catch-up completion marker. */
   shellResumeCompletionMarker: Schema.optionalKey(Schema.Boolean),
   /** Whether thread subscriptions can emit an opt-in catch-up completion marker. */
