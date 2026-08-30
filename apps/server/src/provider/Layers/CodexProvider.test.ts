@@ -1,9 +1,13 @@
 import { assert, it } from "@effect/vitest";
+import * as Effect from "effect/Effect";
+import * as CodexErrors from "effect-codex-app-server/errors";
 
 import {
   applyPreferredCodexDefaultModel,
   isLegacyCodexModel,
+  isUnknownSkillsExtraRootsMethod,
   mapCodexModelCapabilities,
+  registerWorkbenchSkillsRoot,
 } from "./CodexProvider.ts";
 
 it("keeps only the GPT-5.6 Codex family out of legacy models", () => {
@@ -163,3 +167,55 @@ it("ignores custom models that shadow a preferred slug", () => {
 
   assert.deepStrictEqual(models.find((model) => model.isDefault)?.slug, "gpt-5.4");
 });
+
+it("treats only JSON-RPC method-not-found as an unknown skills/extraRoots method", () => {
+  assert.isTrue(
+    isUnknownSkillsExtraRootsMethod(
+      CodexErrors.CodexAppServerRequestError.methodNotFound("skills/extraRoots/set"),
+    ),
+  );
+  assert.isFalse(
+    isUnknownSkillsExtraRootsMethod(
+      CodexErrors.CodexAppServerRequestError.invalidParams("bad path"),
+    ),
+  );
+  assert.isFalse(
+    isUnknownSkillsExtraRootsMethod(new CodexErrors.CodexAppServerProcessExitedError({ code: 1 })),
+  );
+});
+
+it.effect("registerWorkbenchSkillsRoot swallows only method-not-found", () =>
+  Effect.gen(function* () {
+    const surviving = yield* registerWorkbenchSkillsRoot(
+      {
+        request: () =>
+          Effect.fail(
+            CodexErrors.CodexAppServerRequestError.methodNotFound("skills/extraRoots/set"),
+          ),
+      } as never,
+      "/tmp/workbench/skills/skills",
+    ).pipe(
+      Effect.as("ok"),
+      Effect.catch(() => Effect.succeed("failed")),
+    );
+    assert.strictEqual(surviving, "ok");
+
+    const propagating = yield* registerWorkbenchSkillsRoot(
+      {
+        request: () =>
+          Effect.fail(CodexErrors.CodexAppServerRequestError.invalidParams("bad path")),
+      } as never,
+      "/tmp/workbench/skills/skills",
+    ).pipe(
+      Effect.as("ok"),
+      Effect.catch((error) =>
+        Effect.succeed(
+          error._tag === "CodexAppServerRequestError" && error.code === -32602
+            ? "propagated"
+            : "other",
+        ),
+      ),
+    );
+    assert.strictEqual(propagating, "propagated");
+  }),
+);
