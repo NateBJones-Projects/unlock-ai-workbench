@@ -24,6 +24,9 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
+      - name: Test upstream workflow repository targeting
+        run: node --test .github/scripts/upstream-workflow-contract.test.cjs
+
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
         with:

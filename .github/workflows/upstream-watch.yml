@@ -7,6 +7,9 @@ on:
 
 env:
   UPSTREAM_REPO: pingdotgg/t3code
+  # gh otherwise prefers the newly-added `upstream` Git remote for implicit
+  # issue and label commands.
+  GH_REPO: ${{ github.repository }}
 
 permissions:
   contents: read
@@ -51,7 +54,8 @@ jobs:
           UPSTREAM_SHA: ${{ steps.resolve.outputs.upstream_sha }}
         run: |
           gh label create upstream-watch-cursor --color 0E8A16 \
-            --description "Carries the last-seen upstream sha for the watch workflow" 2>/dev/null || true
+            --description "Carries the last-seen upstream sha for the watch workflow" \
+            --force
 
           {
             echo "last-seen-upstream-sha: ${UPSTREAM_SHA}"
@@ -117,7 +121,8 @@ jobs:
           UPSTREAM_SHORT: ${{ steps.resolve.outputs.upstream_short }}
         run: |
           gh label create upstream-breaking-watch --color D93F0B \
-            --description "Upstream T3 Code changed a fork integration point" 2>/dev/null || true
+            --description "Upstream T3 Code changed a fork integration point" \
+            --force
 
           {
             echo "Upstream \`${UPSTREAM_REPO}\` changed one or more fork integration points between \`${CURSOR_SHA:0:8}\` and \`${UPSTREAM_SHORT}\`. These paths carry the Unlock AI Workbench layer (\`.github/upstream-touchpoints.json\`); expect merge friction or behavioral drift at the next sync."

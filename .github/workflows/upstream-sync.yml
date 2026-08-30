@@ -7,6 +7,9 @@ on:
 
 env:
   UPSTREAM_REPO: pingdotgg/t3code
+  # gh otherwise prefers the newly-added `upstream` Git remote for implicit
+  # pull request, issue, and label commands.
+  GH_REPO: ${{ github.repository }}
 
 permissions:
   contents: write
@@ -181,7 +184,8 @@ jobs:
           UPSTREAM_SHA: ${{ steps.resolve.outputs.upstream_sha }}
         run: |
           gh label create upstream-conflict --color B60205 \
-            --description "Upstream T3 Code merge hit conflicts" 2>/dev/null || true
+            --description "Upstream T3 Code merge hit conflicts" \
+            --force
 
           {
             echo "Merging upstream \`${UPSTREAM_REPO}\` head \`${UPSTREAM_SHA}\` into \`${FORK_DEFAULT}\` produced conflicts. The workflow aborted the merge; a manual merge is required."
